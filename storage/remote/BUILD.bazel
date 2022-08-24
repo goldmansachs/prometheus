@@ -1,0 +1,131 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "remote",
+    srcs = [
+        "chunked.go",
+        "client.go",
+        "codec.go",
+        "ewma.go",
+        "intern.go",
+        "max_timestamp.go",
+        "metadata_watcher.go",
+        "queue_manager.go",
+        "read.go",
+        "read_handler.go",
+        "storage.go",
+        "write.go",
+        "write_handler.go",
+    ],
+    importpath = "github.com/prometheus/prometheus/storage/remote",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//config",
+        "//model/exemplar",
+<<<<<<< HEAD
+=======
+        "//model/histogram",
+>>>>>>> 0d91055fe (Release v2.44.0)
+        "//model/labels",
+        "//model/metadata",
+        "//model/relabel",
+        "//model/textparse",
+        "//prompb",
+        "//scrape",
+        "//storage",
+        "//tsdb/chunkenc",
+        "//tsdb/chunks",
+        "//tsdb/record",
+<<<<<<< HEAD
+        "//tsdb/wal",
+=======
+        "//tsdb/wlog",
+>>>>>>> 0d91055fe (Release v2.44.0)
+        "//util/gate",
+        "//util/logging",
+        "@com_github_go_kit_log//:log",
+        "@com_github_go_kit_log//level",
+        "@com_github_gogo_protobuf//proto",
+        "@com_github_golang_snappy//:snappy",
+        "@com_github_prometheus_client_golang//prometheus",
+        "@com_github_prometheus_client_golang//prometheus/promauto",
+        "@com_github_prometheus_common//config",
+        "@com_github_prometheus_common//model",
+        "@com_github_prometheus_common//version",
+<<<<<<< HEAD
+        "@com_github_prometheus_common//sigv4",
+=======
+        "@com_github_prometheus_common_sigv4//:sigv4",
+>>>>>>> 0d91055fe (Release v2.44.0)
+        "@in_gopkg_yaml_v2//:yaml_v2",
+        "@io_opentelemetry_go_contrib_instrumentation_net_http_otelhttp//:otelhttp",
+        "@io_opentelemetry_go_otel//:otel",
+        "@io_opentelemetry_go_otel//attribute",
+<<<<<<< HEAD
+        "@io_opentelemetry_go_otel//trace",
+=======
+        "@io_opentelemetry_go_otel_trace//:trace",
+>>>>>>> 0d91055fe (Release v2.44.0)
+        "@org_uber_go_atomic//:atomic",
+    ],
+)
+
+alias(
+    name = "go_default_library",
+    actual = ":remote",
+    visibility = ["//visibility:public"],
+)
+
+go_test(
+    name = "remote_test",
+    srcs = [
+        "chunked_test.go",
+        "client_test.go",
+        "codec_test.go",
+        "intern_test.go",
+        "metadata_watcher_test.go",
+        "queue_manager_test.go",
+        "read_handler_test.go",
+        "read_test.go",
+        "storage_test.go",
+        "write_handler_test.go",
+        "write_test.go",
+    ],
+    embed = [":remote"],
+    deps = [
+        "//config",
+        "//model/exemplar",
+<<<<<<< HEAD
+=======
+        "//model/histogram",
+>>>>>>> 0d91055fe (Release v2.44.0)
+        "//model/labels",
+        "//model/metadata",
+        "//model/relabel",
+        "//model/textparse",
+        "//model/timestamp",
+        "//prompb",
+        "//promql",
+        "//scrape",
+        "//storage",
+<<<<<<< HEAD
+        "//tsdb/chunks",
+        "//tsdb/record",
+=======
+        "//tsdb",
+        "//tsdb/chunkenc",
+        "//tsdb/chunks",
+        "//tsdb/record",
+        "//tsdb/tsdbutil",
+>>>>>>> 0d91055fe (Release v2.44.0)
+        "@com_github_go_kit_log//:log",
+        "@com_github_gogo_protobuf//proto",
+        "@com_github_golang_snappy//:snappy",
+        "@com_github_prometheus_client_golang//prometheus",
+        "@com_github_prometheus_client_golang//prometheus/testutil",
+        "@com_github_prometheus_common//config",
+        "@com_github_prometheus_common//model",
+        "@com_github_stretchr_testify//require",
+        "@org_uber_go_atomic//:atomic",
+    ],
+)

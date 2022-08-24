@@ -1,0 +1,118 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_binary", "go_library", "go_test")
+
+go_library(
+    name = "promtool_lib",
+    srcs = [
+        "analyze.go",
+        "archive.go",
+        "backfill.go",
+        "debug.go",
+        "main.go",
+        "metrics.go",
+        "query.go",
+        "rules.go",
+        "sd.go",
+        "tsdb.go",
+        "unittest.go",
+    ],
+    importpath = "github.com/prometheus/prometheus/cmd/promtool",
+    visibility = ["//visibility:private"],
+    deps = [
+        "//config",
+        "//discovery",
+        "//discovery/file",
+        "//discovery/kubernetes",
+        "//discovery/targetgroup",
+        "//model/histogram",
+        "//model/labels",
+        "//model/rulefmt",
+        "//model/textparse",
+        "//model/timestamp",
+        "//notifier",
+        "//plugins",
+        "//promql",
+        "//promql/parser",
+        "//rules",
+        "//scrape",
+        "//storage",
+        "//storage/remote",
+        "//tsdb",
+<<<<<<< HEAD
+=======
+        "//tsdb/chunkenc",
+>>>>>>> 0d91055fe (Release v2.44.0)
+        "//tsdb/chunks",
+        "//tsdb/errors",
+        "//tsdb/fileutil",
+        "//tsdb/index",
+<<<<<<< HEAD
+=======
+        "//util/documentcli",
+        "//util/fmtutil",
+        "@com_github_alecthomas_kingpin_v2//:kingpin",
+>>>>>>> 0d91055fe (Release v2.44.0)
+        "@com_github_alecthomas_units//:units",
+        "@com_github_go_kit_log//:log",
+        "@com_github_go_kit_log//level",
+        "@com_github_golang_snappy//:snappy",
+        "@com_github_google_pprof//profile",
+        "@com_github_grafana_regexp//:regexp",
+        "@com_github_nsf_jsondiff//:go_default_library",
+        "@com_github_prometheus_client_golang//api",
+        "@com_github_prometheus_client_golang//api/prometheus/v1:prometheus",
+        "@com_github_prometheus_client_golang//prometheus",
+        "@com_github_prometheus_client_golang//prometheus/promhttp",
+        "@com_github_prometheus_client_golang//prometheus/testutil/promlint",
+        "@com_github_prometheus_client_model//go",
+        "@com_github_prometheus_common//config",
+        "@com_github_prometheus_common//expfmt",
+        "@com_github_prometheus_common//model",
+        "@com_github_prometheus_common//version",
+        "@com_github_prometheus_exporter_toolkit//web",
+<<<<<<< HEAD
+        "@in_gopkg_alecthomas_kingpin_v2//:kingpin_v2",
+=======
+>>>>>>> 0d91055fe (Release v2.44.0)
+        "@in_gopkg_yaml_v2//:yaml_v2",
+        "@org_golang_x_exp//slices",
+    ],
+)
+
+go_binary(
+    name = "promtool",
+    embed = [":promtool_lib"],
+    visibility = ["//visibility:public"],
+)
+
+go_test(
+    name = "promtool_test",
+    srcs = [
+        "analyze_test.go",
+        "backfill_test.go",
+        "main_test.go",
+        "rules_test.go",
+        "sd_test.go",
+        "tsdb_test.go",
+        "unittest_test.go",
+    ],
+    data = glob(["testdata/**"]),
+    embed = [":promtool_lib"],
+    deps = [
+        "//config",
+        "//discovery/targetgroup",
+        "//model/labels",
+        "//model/relabel",
+        "//model/rulefmt",
+        "//promql",
+        "//storage",
+        "//tsdb",
+<<<<<<< HEAD
+=======
+        "//tsdb/chunkenc",
+>>>>>>> 0d91055fe (Release v2.44.0)
+        "@com_github_go_kit_log//:log",
+        "@com_github_prometheus_client_golang//api/prometheus/v1:prometheus",
+        "@com_github_prometheus_common//model",
+        "@com_github_stretchr_testify//require",
+    ],
+)

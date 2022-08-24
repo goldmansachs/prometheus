@@ -1,0 +1,87 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "scrape",
+    srcs = [
+        "manager.go",
+        "scrape.go",
+        "target.go",
+    ],
+    importpath = "github.com/prometheus/prometheus/scrape",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//config",
+        "//discovery/targetgroup",
+        "//model/exemplar",
+<<<<<<< HEAD
+=======
+        "//model/histogram",
+>>>>>>> 0d91055fe (Release v2.44.0)
+        "//model/labels",
+        "//model/metadata",
+        "//model/relabel",
+        "//model/textparse",
+        "//model/timestamp",
+        "//model/value",
+        "//storage",
+        "//util/osutil",
+        "//util/pool",
+        "@com_github_go_kit_log//:log",
+        "@com_github_go_kit_log//level",
+        "@com_github_pkg_errors//:errors",
+        "@com_github_prometheus_client_golang//prometheus",
+        "@com_github_prometheus_common//config",
+        "@com_github_prometheus_common//model",
+        "@com_github_prometheus_common//version",
+    ],
+)
+
+alias(
+    name = "go_default_library",
+    actual = ":scrape",
+    visibility = ["//visibility:public"],
+)
+
+go_test(
+    name = "scrape_test",
+    srcs = [
+        "helpers_test.go",
+        "manager_test.go",
+        "scrape_test.go",
+        "target_test.go",
+    ],
+    data = glob(["testdata/**"]),
+    embed = [":scrape"],
+    deps = [
+        "//config",
+<<<<<<< HEAD
+        "//discovery/targetgroup",
+        "//model/exemplar",
+=======
+        "//discovery",
+        "//discovery/targetgroup",
+        "//model/exemplar",
+        "//model/histogram",
+>>>>>>> 0d91055fe (Release v2.44.0)
+        "//model/labels",
+        "//model/metadata",
+        "//model/relabel",
+        "//model/textparse",
+        "//model/timestamp",
+        "//model/value",
+        "//storage",
+<<<<<<< HEAD
+=======
+        "//tsdb/chunkenc",
+>>>>>>> 0d91055fe (Release v2.44.0)
+        "//util/teststorage",
+        "//util/testutil",
+        "@com_github_go_kit_log//:log",
+        "@com_github_pkg_errors//:errors",
+        "@com_github_prometheus_client_model//go",
+        "@com_github_prometheus_common//config",
+        "@com_github_prometheus_common//model",
+        "@com_github_stretchr_testify//require",
+        "@in_gopkg_yaml_v2//:yaml_v2",
+    ],
+)

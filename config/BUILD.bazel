@@ -1,0 +1,84 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "config",
+    srcs = ["config.go"],
+    importpath = "github.com/prometheus/prometheus/config",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//discovery",
+        "//discovery/targetgroup",
+        "//model/labels",
+        "//model/relabel",
+        "//storage/remote/azuread",
+        "@com_github_alecthomas_units//:units",
+        "@com_github_go_kit_log//:log",
+        "@com_github_go_kit_log//level",
+        "@com_github_grafana_regexp//:regexp",
+        "@com_github_prometheus_common//config",
+        "@com_github_prometheus_common//model",
+<<<<<<< HEAD
+        "@com_github_prometheus_common//sigv4",
+=======
+        "@com_github_prometheus_common_sigv4//:sigv4",
+>>>>>>> 0d91055fe (Release v2.44.0)
+        "@in_gopkg_yaml_v2//:yaml_v2",
+    ],
+)
+
+alias(
+    name = "go_default_library",
+    actual = ":config",
+    visibility = ["//visibility:public"],
+)
+
+go_test(
+    name = "config_test",
+    srcs = [
+        "config_default_test.go",
+        "config_test.go",
+        "config_windows_test.go",
+    ],
+    data = glob(["testdata/**"]),
+    embed = [":config"],
+    deps = [
+        "//discovery",
+        "//discovery/aws",
+        "//discovery/azure",
+        "//discovery/consul",
+        "//discovery/digitalocean",
+        "//discovery/dns",
+        "//discovery/eureka",
+        "//discovery/file",
+        "//discovery/hetzner",
+        "//discovery/http",
+        "//discovery/ionos",
+        "//discovery/kubernetes",
+        "//discovery/linode",
+        "//discovery/marathon",
+        "//discovery/moby",
+        "//discovery/nomad",
+        "//discovery/openstack",
+<<<<<<< HEAD
+=======
+        "//discovery/ovhcloud",
+>>>>>>> 0d91055fe (Release v2.44.0)
+        "//discovery/puppetdb",
+        "//discovery/scaleway",
+        "//discovery/targetgroup",
+        "//discovery/triton",
+        "//discovery/uyuni",
+        "//discovery/vultr",
+        "//discovery/xds",
+        "//discovery/zookeeper",
+        "//model/labels",
+        "//model/relabel",
+        "@com_github_alecthomas_units//:units",
+        "@com_github_go_kit_log//:log",
+        "@com_github_grafana_regexp//:regexp",
+        "@com_github_prometheus_common//config",
+        "@com_github_prometheus_common//model",
+        "@com_github_stretchr_testify//require",
+        "@in_gopkg_yaml_v2//:yaml_v2",
+    ],
+)

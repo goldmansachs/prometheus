@@ -1,0 +1,67 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "textparse",
+    srcs = [
+        "interface.go",
+        "openmetricslex.l.go",
+        "openmetricsparse.go",
+        "promlex.l.go",
+        "promparse.go",
+<<<<<<< HEAD
+=======
+        "protobufparse.go",
+>>>>>>> 0d91055fe (Release v2.44.0)
+    ],
+    importpath = "github.com/prometheus/prometheus/model/textparse",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//model/exemplar",
+<<<<<<< HEAD
+        "//model/labels",
+        "//model/value",
+=======
+        "//model/histogram",
+        "//model/labels",
+        "//model/value",
+        "//prompb/io/prometheus/client",
+        "@com_github_gogo_protobuf//proto",
+        "@com_github_gogo_protobuf//types",
+        "@com_github_prometheus_common//model",
+>>>>>>> 0d91055fe (Release v2.44.0)
+    ],
+)
+
+alias(
+    name = "go_default_library",
+    actual = ":textparse",
+    visibility = ["//visibility:public"],
+)
+
+go_test(
+    name = "textparse_test",
+    srcs = [
+        "interface_test.go",
+        "openmetricsparse_test.go",
+        "promparse_test.go",
+<<<<<<< HEAD
+=======
+        "protobufparse_test.go",
+>>>>>>> 0d91055fe (Release v2.44.0)
+    ],
+    embed = [":textparse"],
+    deps = [
+        "//model/exemplar",
+<<<<<<< HEAD
+        "//model/labels",
+=======
+        "//model/histogram",
+        "//model/labels",
+        "//prompb/io/prometheus/client",
+        "@com_github_gogo_protobuf//proto",
+>>>>>>> 0d91055fe (Release v2.44.0)
+        "@com_github_prometheus_common//expfmt",
+        "@com_github_prometheus_common//model",
+        "@com_github_stretchr_testify//require",
+    ],
+)

@@ -1,0 +1,44 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "vultr",
+    srcs = [
+        "metrics.go",
+        "vultr.go",
+    ],
+    importpath = "github.com/prometheus/prometheus/discovery/vultr",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//discovery",
+        "//discovery/refresh",
+        "//discovery/targetgroup",
+        "@com_github_go_kit_log//:log",
+        "@com_github_prometheus_client_golang//prometheus",
+        "@com_github_prometheus_common//config",
+        "@com_github_prometheus_common//model",
+        "@com_github_prometheus_common//version",
+        "@com_github_vultr_govultr_v2//:govultr",
+    ],
+)
+
+alias(
+    name = "go_default_library",
+    actual = ":vultr",
+    visibility = ["//visibility:public"],
+)
+
+go_test(
+    name = "vultr_test",
+    srcs = [
+        "mock_test.go",
+        "vultr_test.go",
+    ],
+    embed = [":vultr"],
+    deps = [
+        "//discovery",
+        "@com_github_go_kit_log//:log",
+        "@com_github_prometheus_client_golang//prometheus",
+        "@com_github_prometheus_common//model",
+        "@com_github_stretchr_testify//require",
+    ],
+)

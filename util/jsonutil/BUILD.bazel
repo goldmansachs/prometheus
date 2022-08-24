@@ -1,0 +1,18 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "jsonutil",
+    srcs = ["marshal.go"],
+    importpath = "github.com/prometheus/prometheus/util/jsonutil",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//model/histogram",
+        "@com_github_json_iterator_go//:go",
+    ],
+)
+
+alias(
+    name = "go_default_library",
+    actual = ":jsonutil",
+    visibility = ["//visibility:public"],
+)

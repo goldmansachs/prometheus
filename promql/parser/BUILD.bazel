@@ -1,0 +1,51 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "parser",
+    srcs = [
+        "ast.go",
+        "functions.go",
+        "generated_parser.y.go",
+        "lex.go",
+        "parse.go",
+        "prettier.go",
+        "printer.go",
+        "value.go",
+    ],
+    importpath = "github.com/prometheus/prometheus/promql/parser",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//model/histogram",
+        "//model/labels",
+        "//model/timestamp",
+        "//model/value",
+        "//promql/parser/posrange",
+        "//storage",
+        "//util/strutil",
+        "@com_github_prometheus_common//model",
+    ],
+)
+
+alias(
+    name = "go_default_library",
+    actual = ":parser",
+    visibility = ["//visibility:public"],
+)
+
+go_test(
+    name = "parser_test",
+    srcs = [
+        "lex_test.go",
+        "parse_test.go",
+        "prettier_test.go",
+        "printer_test.go",
+    ],
+    embed = [":parser"],
+    deps = [
+        "//model/histogram",
+        "//model/labels",
+        "//promql/parser/posrange",
+        "@com_github_prometheus_common//model",
+        "@com_github_stretchr_testify//require",
+    ],
+)

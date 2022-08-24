@@ -1017,3 +1017,56 @@ func TestStop_DrainingEnabled(t *testing.T) {
 
 	require.Equal(t, int64(2), alertsReceived.Load())
 }
+
+func TestIsAlertmanagerActive(t *testing.T) {
+	tests := []struct {
+		name           string
+		serverResponse int
+		serverDelay    time.Duration
+		timeout        time.Duration
+		expected       bool
+	}{
+		{
+			name:           "Active Alertmanager",
+			serverResponse: http.StatusOK,
+			serverDelay:    0,
+			timeout:        5 * time.Second,
+			expected:       true,
+		},
+		{
+			name:           "Inactive Alertmanager",
+			serverResponse: http.StatusInternalServerError,
+			serverDelay:    0,
+			timeout:        5 * time.Second,
+			expected:       false,
+		},
+		{
+			name:           "Timeout Alertmanager",
+			serverResponse: http.StatusOK,
+			serverDelay:    10 * time.Second,
+			timeout:        5 * time.Second,
+			expected:       false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				time.Sleep(tt.serverDelay)
+				w.WriteHeader(tt.serverResponse)
+			}))
+			defer server.Close()
+
+			u, err := url.Parse(server.URL)
+			if err != nil {
+				t.Fatalf("Failed to parse server URL: %v", err)
+			}
+
+			manager := &Manager{}
+			active := manager.isAlertmanagerActive(u, tt.timeout)
+			if active != tt.expected {
+				t.Errorf("Expected %v, got %v", tt.expected, active)
+			}
+		})
+	}
+}
