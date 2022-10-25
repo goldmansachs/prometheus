@@ -1,5 +1,5 @@
-load("@bazel_rules//area:def.bzl", "go_repository")
-#load("@bazel_gazelle//:deps.bzl", "go_repository")
+#load("@bazel_rules//area:def.bzl", "go_repository")
+load("@bazel_gazelle//:deps.bzl", "go_repository")
 
 def go_dependencies():
     go_repository(
@@ -718,7 +718,7 @@ def go_dependencies():
     )
     go_repository(
         name = "com_github_go_resty_resty_v2",
-        build_file_proto_mode = "disable",
+	build_file_generation = "on",
         importpath = "github.com/go-resty/resty/v2",
         sum = "h1:JVrqSeQfdhYRFk24TvhTZWU0q8lfCojxZQFi3Ou7+uY=",
         version = "v2.1.1-0.20191201195748-d7b97669fe48",
