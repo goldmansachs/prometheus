@@ -1,5 +1,5 @@
-#load("@bazel_rules//area:def.bzl", "go_repository")
-load("@bazel_gazelle//:deps.bzl", "go_repository")
+load("@bazel_rules//area:def.bzl", "go_repository")
+#load("@bazel_gazelle//:deps.bzl", "go_repository")
 
 def go_dependencies():
     go_repository(
@@ -886,7 +886,6 @@ def go_dependencies():
     )
     go_repository(
         name = "com_github_golang_protobuf",
-        build_file_proto_mode = "disable",
         importpath = "github.com/golang/protobuf",
         sum = "h1:ROPKBNFfQgOUMifHyP+KYbvpjbdoFNs+aK7DXlji0Tw=",
         version = "v1.5.2",
@@ -1061,14 +1060,21 @@ def go_dependencies():
     )
     go_repository(
         name = "com_github_grpc_ecosystem_grpc_gateway",
-        build_file_proto_mode = "disable",
+        build_file_generation = "on",
         importpath = "github.com/grpc-ecosystem/grpc-gateway",
         sum = "h1:gmcG1KaJ57LophUzW0Hy8NmPhnMZb4M0+kPpLofRdBo=",
         version = "v1.16.0",
     )
     go_repository(
+        name = "grpc_ecosystem_grpc_gateway",
+        build_file_generation = "on",
+        importpath = "github.com/grpc-ecosystem/grpc-gateway/v2",
+        sum = "h1:/sDbPb60SusIXjiJGYLUoS/rAQurQmvGWmwn2bBPM9c=",
+        version = "v2.11.1",
+    )
+    go_repository(
         name = "com_github_grpc_ecosystem_grpc_gateway_v2",
-        build_file_proto_mode = "disable",
+        build_file_generation = "on",
         importpath = "github.com/grpc-ecosystem/grpc-gateway/v2",
         sum = "h1:/sDbPb60SusIXjiJGYLUoS/rAQurQmvGWmwn2bBPM9c=",
         version = "v2.11.1",
@@ -3027,6 +3033,14 @@ def go_dependencies():
         importpath = "google.golang.org/genproto",
         sum = "h1:mmbq5q8M1t7dhkLw320YK4PsOXm6jdnUAkErImaIqOg=",
         version = "v0.0.0-20220920201722-2b89144ce006",
+    )
+    go_repository(
+        name = "org_golang_google_grpc",
+        build_file_proto_mode = "disable",
+	github_repo = "grpc/grpc-go",
+        importpath = "google.golang.org/grpc",
+        release = "v1.45.0",
+	sha256 = "fc67e6dc18bb7990688b080b72b446791d4c5e58c2e21207717f15daf0c3be65",
     )
     go_repository(
         name = "org_golang_google_grpc_cmd_protoc_gen_go_grpc",
