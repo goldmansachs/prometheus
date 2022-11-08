@@ -13,11 +13,11 @@ go_library(
         "//discovery/refresh",
         "//discovery/targetgroup",
         "//util/strutil",
-        "@com_github_go_kit_log//:go_default_library",
-        "@com_github_grafana_regexp//:go_default_library",
-        "@com_github_prometheus_common//config:go_default_library",
-        "@com_github_prometheus_common//model:go_default_library",
-        "@com_github_prometheus_common//version:go_default_library",
+        "@com_github_go_kit_log//:log",
+        "@com_github_grafana_regexp//:regexp",
+        "@com_github_prometheus_common//config",
+        "@com_github_prometheus_common//model",
+        "@com_github_prometheus_common//version",
     ],
 )
 
@@ -33,9 +33,9 @@ go_test(
     embed = [":puppetdb"],
     deps = [
         "//discovery/targetgroup",
-        "@com_github_go_kit_log//:go_default_library",
-        "@com_github_prometheus_common//config:go_default_library",
-        "@com_github_prometheus_common//model:go_default_library",
-        "@com_github_stretchr_testify//require:go_default_library",
+        "@com_github_go_kit_log//:log",
+        "@com_github_prometheus_common//config",
+        "@com_github_prometheus_common//model",
+        "@com_github_stretchr_testify//require",
     ],
 )

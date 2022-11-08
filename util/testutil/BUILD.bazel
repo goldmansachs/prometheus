@@ -13,9 +13,9 @@ go_library(
     importpath = "github.com/prometheus/prometheus/util/testutil",
     visibility = ["//visibility:public"],
     deps = [
-        "@com_github_go_kit_log//:go_default_library",
-        "@com_github_stretchr_testify//require:go_default_library",
-        "@org_uber_go_goleak//:go_default_library",
+        "@com_github_go_kit_log//:log",
+        "@com_github_stretchr_testify//require",
+        "@org_uber_go_goleak//:goleak",
     ],
 )
 

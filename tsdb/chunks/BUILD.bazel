@@ -16,10 +16,10 @@ go_library(
         "//tsdb/chunkenc",
         "//tsdb/errors",
         "//tsdb/fileutil",
-        "@com_github_dennwc_varint//:go_default_library",
-        "@com_github_pkg_errors//:go_default_library",
-        "@com_github_prometheus_client_golang//prometheus:go_default_library",
-        "@org_uber_go_atomic//:go_default_library",
+        "@com_github_dennwc_varint//:varint",
+        "@com_github_pkg_errors//:errors",
+        "@com_github_prometheus_client_golang//prometheus",
+        "@org_uber_go_atomic//:atomic",
     ],
 )
 
@@ -40,7 +40,7 @@ go_test(
     embed = [":chunks"],
     deps = [
         "//tsdb/chunkenc",
-        "@com_github_stretchr_testify//require:go_default_library",
-        "@org_uber_go_atomic//:go_default_library",
+        "@com_github_stretchr_testify//require",
+        "@org_uber_go_atomic//:atomic",
     ],
 )

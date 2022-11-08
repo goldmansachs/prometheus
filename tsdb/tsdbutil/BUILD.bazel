@@ -15,12 +15,12 @@ go_library(
         "//tsdb/errors",
         "//tsdb/fileutil",
         "//util/testutil",
-        "@com_github_go_kit_log//:go_default_library",
-        "@com_github_go_kit_log//level:go_default_library",
-        "@com_github_pkg_errors//:go_default_library",
-        "@com_github_prometheus_client_golang//prometheus:go_default_library",
-        "@com_github_prometheus_client_golang//prometheus/testutil:go_default_library",
-        "@com_github_stretchr_testify//require:go_default_library",
+        "@com_github_go_kit_log//:log",
+        "@com_github_go_kit_log//level",
+        "@com_github_pkg_errors//:errors",
+        "@com_github_prometheus_client_golang//prometheus",
+        "@com_github_prometheus_client_golang//prometheus/testutil",
+        "@com_github_stretchr_testify//require",
     ],
 )
 
@@ -36,7 +36,7 @@ go_test(
     embed = [":tsdbutil"],
     deps = [
         "//util/testutil",
-        "@com_github_go_kit_log//:go_default_library",
-        "@com_github_stretchr_testify//require:go_default_library",
+        "@com_github_go_kit_log//:log",
+        "@com_github_stretchr_testify//require",
     ],
 )

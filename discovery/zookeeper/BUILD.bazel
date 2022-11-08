@@ -10,9 +10,9 @@ go_library(
         "//discovery/targetgroup",
         "//util/strutil",
         "//util/treecache",
-        "@com_github_go_kit_log//:go_default_library",
-        "@com_github_go_zookeeper_zk//:go_default_library",
-        "@com_github_prometheus_common//model:go_default_library",
+        "@com_github_go_kit_log//:log",
+        "@com_github_go_zookeeper_zk//:zk",
+        "@com_github_prometheus_common//model",
     ],
 )
 
@@ -27,7 +27,7 @@ go_test(
     srcs = ["zookeeper_test.go"],
     embed = [":zookeeper"],
     deps = [
-        "@com_github_prometheus_common//model:go_default_library",
-        "@org_uber_go_goleak//:go_default_library",
+        "@com_github_prometheus_common//model",
+        "@org_uber_go_goleak//:goleak",
     ],
 )

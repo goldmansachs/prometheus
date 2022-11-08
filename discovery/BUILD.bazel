@@ -11,11 +11,11 @@ go_library(
     visibility = ["//visibility:public"],
     deps = [
         "//discovery/targetgroup",
-        "@com_github_go_kit_log//:go_default_library",
-        "@com_github_go_kit_log//level:go_default_library",
-        "@com_github_prometheus_client_golang//prometheus:go_default_library",
-        "@com_github_prometheus_common//config:go_default_library",
-        "@in_gopkg_yaml_v2//:go_default_library",
+        "@com_github_go_kit_log//:log",
+        "@com_github_go_kit_log//level",
+        "@com_github_prometheus_client_golang//prometheus",
+        "@com_github_prometheus_common//config",
+        "@in_gopkg_yaml_v2//:yaml_v2",
     ],
 )
 
@@ -32,9 +32,9 @@ go_test(
     deps = [
         "//discovery/targetgroup",
         "//util/testutil",
-        "@com_github_go_kit_log//:go_default_library",
-        "@com_github_prometheus_client_golang//prometheus/testutil:go_default_library",
-        "@com_github_prometheus_common//model:go_default_library",
-        "@com_github_stretchr_testify//require:go_default_library",
+        "@com_github_go_kit_log//:log",
+        "@com_github_prometheus_client_golang//prometheus/testutil",
+        "@com_github_prometheus_common//model",
+        "@com_github_stretchr_testify//require",
     ],
 )

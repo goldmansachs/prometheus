@@ -7,7 +7,7 @@ go_library(
     visibility = ["//visibility:private"],
     deps = [
         "//storage/remote",
-        "@com_github_prometheus_common//model:go_default_library",
+        "@com_github_prometheus_common//model",
     ],
 )
 

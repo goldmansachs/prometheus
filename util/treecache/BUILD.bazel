@@ -6,10 +6,10 @@ go_library(
     importpath = "github.com/prometheus/prometheus/util/treecache",
     visibility = ["//visibility:public"],
     deps = [
-        "@com_github_go_kit_log//:go_default_library",
-        "@com_github_go_kit_log//level:go_default_library",
-        "@com_github_go_zookeeper_zk//:go_default_library",
-        "@com_github_prometheus_client_golang//prometheus:go_default_library",
+        "@com_github_go_kit_log//:log",
+        "@com_github_go_kit_log//level",
+        "@com_github_go_zookeeper_zk//:zk",
+        "@com_github_prometheus_client_golang//prometheus",
     ],
 )
 

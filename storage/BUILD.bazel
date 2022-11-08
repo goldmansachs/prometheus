@@ -24,9 +24,9 @@ go_library(
         "//tsdb/chunks",
         "//tsdb/errors",
         "//tsdb/tsdbutil",
-        "@com_github_go_kit_log//:go_default_library",
-        "@com_github_go_kit_log//level:go_default_library",
-        "@com_github_prometheus_common//model:go_default_library",
+        "@com_github_go_kit_log//:log",
+        "@com_github_go_kit_log//level",
+        "@com_github_prometheus_common//model",
     ],
 )
 
@@ -51,8 +51,8 @@ go_test(
         "//tsdb/chunkenc",
         "//tsdb/tsdbutil",
         "//util/teststorage",
-        "@com_github_pkg_errors//:go_default_library",
-        "@com_github_prometheus_common//model:go_default_library",
-        "@com_github_stretchr_testify//require:go_default_library",
+        "@com_github_pkg_errors//:errors",
+        "@com_github_prometheus_common//model",
+        "@com_github_stretchr_testify//require",
     ],
 )

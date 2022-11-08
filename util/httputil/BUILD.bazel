@@ -11,7 +11,7 @@ go_library(
     visibility = ["//visibility:public"],
     deps = [
         "//promql",
-        "@com_github_grafana_regexp//:go_default_library",
+        "@com_github_grafana_regexp//:regexp",
     ],
 )
 
@@ -29,7 +29,7 @@ go_test(
     ],
     embed = [":httputil"],
     deps = [
-        "@com_github_grafana_regexp//:go_default_library",
-        "@com_github_stretchr_testify//require:go_default_library",
+        "@com_github_grafana_regexp//:regexp",
+        "@com_github_stretchr_testify//require",
     ],
 )

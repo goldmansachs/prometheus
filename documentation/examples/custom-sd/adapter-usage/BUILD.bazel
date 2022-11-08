@@ -9,10 +9,10 @@ go_library(
         "//discovery/targetgroup",
         "//documentation/examples/custom-sd/adapter",
         "//util/strutil",
-        "@com_github_go_kit_log//:go_default_library",
-        "@com_github_go_kit_log//level:go_default_library",
-        "@com_github_prometheus_common//model:go_default_library",
-        "@in_gopkg_alecthomas_kingpin_v2//:go_default_library",
+        "@com_github_go_kit_log//:log",
+        "@com_github_go_kit_log//level",
+        "@com_github_prometheus_common//model",
+        "@in_gopkg_alecthomas_kingpin_v2//:kingpin_v2",
     ],
 )
 

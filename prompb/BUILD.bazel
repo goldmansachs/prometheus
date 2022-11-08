@@ -10,8 +10,8 @@ go_library(
     importpath = "github.com/prometheus/prometheus/prompb",
     visibility = ["//visibility:public"],
     deps = [
-        "@com_github_gogo_protobuf//gogoproto:go_default_library",
-        "@com_github_gogo_protobuf//proto:go_default_library",
+        "@com_github_gogo_protobuf//gogoproto",
+        "@com_github_gogo_protobuf//proto",
     ],
 )
 

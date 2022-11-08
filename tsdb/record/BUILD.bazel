@@ -12,7 +12,7 @@ go_library(
         "//tsdb/chunks",
         "//tsdb/encoding",
         "//tsdb/tombstones",
-        "@com_github_pkg_errors//:go_default_library",
+        "@com_github_pkg_errors//:errors",
     ],
 )
 
@@ -30,7 +30,7 @@ go_test(
         "//model/labels",
         "//tsdb/encoding",
         "//tsdb/tombstones",
-        "@com_github_pkg_errors//:go_default_library",
-        "@com_github_stretchr_testify//require:go_default_library",
+        "@com_github_pkg_errors//:errors",
+        "@com_github_stretchr_testify//require",
     ],
 )

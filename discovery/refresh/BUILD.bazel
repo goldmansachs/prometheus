@@ -7,9 +7,9 @@ go_library(
     visibility = ["//visibility:public"],
     deps = [
         "//discovery/targetgroup",
-        "@com_github_go_kit_log//:go_default_library",
-        "@com_github_go_kit_log//level:go_default_library",
-        "@com_github_prometheus_client_golang//prometheus:go_default_library",
+        "@com_github_go_kit_log//:log",
+        "@com_github_go_kit_log//level",
+        "@com_github_prometheus_client_golang//prometheus",
     ],
 )
 
@@ -25,8 +25,8 @@ go_test(
     embed = [":refresh"],
     deps = [
         "//discovery/targetgroup",
-        "@com_github_prometheus_common//model:go_default_library",
-        "@com_github_stretchr_testify//require:go_default_library",
-        "@org_uber_go_goleak//:go_default_library",
+        "@com_github_prometheus_common//model",
+        "@com_github_stretchr_testify//require",
+        "@org_uber_go_goleak//:goleak",
     ],
 )

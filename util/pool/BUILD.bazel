@@ -17,5 +17,5 @@ go_test(
     name = "pool_test",
     srcs = ["pool_test.go"],
     embed = [":pool"],
-    deps = ["@com_github_stretchr_testify//require:go_default_library"],
+    deps = ["@com_github_stretchr_testify//require"],
 )

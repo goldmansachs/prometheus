@@ -6,8 +6,8 @@ go_library(
     importpath = "github.com/prometheus/prometheus/web/ui",
     visibility = ["//visibility:public"],
     deps = [
-        "@com_github_shurcool_httpfs//filter:go_default_library",
-        "@com_github_shurcool_httpfs//union:go_default_library",
+        "@com_github_shurcool_httpfs//filter",
+        "@com_github_shurcool_httpfs//union",
     ],
 )
 

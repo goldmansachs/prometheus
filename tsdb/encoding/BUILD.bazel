@@ -6,8 +6,8 @@ go_library(
     importpath = "github.com/prometheus/prometheus/tsdb/encoding",
     visibility = ["//visibility:public"],
     deps = [
-        "@com_github_dennwc_varint//:go_default_library",
-        "@com_github_pkg_errors//:go_default_library",
+        "@com_github_dennwc_varint//:varint",
+        "@com_github_pkg_errors//:errors",
     ],
 )
 

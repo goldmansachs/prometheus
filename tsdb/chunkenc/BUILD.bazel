@@ -9,7 +9,7 @@ go_library(
     ],
     importpath = "github.com/prometheus/prometheus/tsdb/chunkenc",
     visibility = ["//visibility:public"],
-    deps = ["@com_github_pkg_errors//:go_default_library"],
+    deps = ["@com_github_pkg_errors//:errors"],
 )
 
 alias(
@@ -25,5 +25,5 @@ go_test(
         "chunk_test.go",
     ],
     embed = [":chunkenc"],
-    deps = ["@com_github_stretchr_testify//require:go_default_library"],
+    deps = ["@com_github_stretchr_testify//require"],
 )

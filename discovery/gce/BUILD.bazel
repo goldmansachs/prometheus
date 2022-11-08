@@ -10,11 +10,11 @@ go_library(
         "//discovery/refresh",
         "//discovery/targetgroup",
         "//util/strutil",
-        "@com_github_go_kit_log//:go_default_library",
-        "@com_github_prometheus_common//model:go_default_library",
-        "@org_golang_google_api//compute/v1:go_default_library",
-        "@org_golang_google_api//option:go_default_library",
-        "@org_golang_x_oauth2//google:go_default_library",
+        "@com_github_go_kit_log//:log",
+        "@com_github_prometheus_common//model",
+        "@org_golang_google_api//compute/v1:compute",
+        "@org_golang_google_api//option",
+        "@org_golang_x_oauth2//google",
     ],
 )
 
