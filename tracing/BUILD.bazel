@@ -19,7 +19,7 @@ go_library(
         "@io_opentelemetry_go_otel_exporters_otlp_otlptrace_otlptracehttp//:otlptracehttp",
         "@io_opentelemetry_go_otel_sdk//resource",
         "@io_opentelemetry_go_otel_sdk//trace",
-        "@io_opentelemetry_go_otel_trace//:trace",
+        "@io_opentelemetry_go_otel//trace",
         "@org_golang_google_grpc//credentials",
     ],
 )
@@ -41,6 +41,6 @@ go_test(
         "@com_github_prometheus_common//config",
         "@com_github_stretchr_testify//require",
         "@io_opentelemetry_go_otel//:otel",
-        "@io_opentelemetry_go_otel_trace//:trace",
+        "@io_opentelemetry_go_otel//trace",
     ],
 )

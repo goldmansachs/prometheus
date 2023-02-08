@@ -1969,13 +1969,6 @@ def go_dependencies():
         version = "v0.2.0",
     )
     go_repository(
-        name = "com_github_prometheus_common_sigv4",
-        build_file_proto_mode = "disable",
-        importpath = "github.com/prometheus/common/sigv4",
-        sum = "h1:qoVebwtwwEhS85Czm2dSROY5fTo2PAPEVdDeppTwGX4=",
-        version = "v0.1.0",
-    )
-    go_repository(
         name = "com_github_prometheus_exporter_toolkit",
         build_file_proto_mode = "disable",
         importpath = "github.com/prometheus/exporter-toolkit",
@@ -2976,13 +2969,6 @@ def go_dependencies():
         build_file_proto_mode = "disable",
         importpath = "go.opentelemetry.io/otel/sdk",
         sum = "h1:jZ6K7sVn04kk/3DNUdJ4mqRlGDiXAVuIG+MMENpTNdY=",
-        version = "v1.10.0",
-    )
-    go_repository(
-        name = "io_opentelemetry_go_otel_trace",
-        build_file_proto_mode = "disable",
-        importpath = "go.opentelemetry.io/otel/trace",
-        sum = "h1:npQMbR8o7mum8uF95yFbOEJffhs1sbCOfDh8zAJiH5E=",
         version = "v1.10.0",
     )
     go_repository(
