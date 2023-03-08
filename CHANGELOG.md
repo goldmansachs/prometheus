@@ -1,5 +1,64 @@
 # Changelog
 
+## 2.42.0 / 2023-01-31
+
+This release comes with a bunch of feature coverage for native histograms and breaking changes.
+
+If you are trying native histograms already, we recommend you remove the `wal` directory when upgrading.
+Because the old WAL record for native histograms is not backward compatible in v2.42.0, this will lead to some data loss for the latest data.
+
+Additionally, if you scrape "float histograms" or use recording rules on native histograms in v2.42.0 (which writes float histograms),
+it is a one-way street since older versions do not support float histograms.
+
+* [CHANGE] **breaking** TSDB: Changed WAL record format for the experimental native histograms. #11783
+* [FEATURE] Add 'keep_firing_for' field to alerting rules. #11827
+* [FEATURE] Promtool: Add support of selecting timeseries for TSDB dump. #11872
+* [ENHANCEMENT] Agent: Native histogram support. #11842
+* [ENHANCEMENT] Rules: Support native histograms in recording rules. #11838
+* [ENHANCEMENT] SD: Add container ID as a meta label for pod targets for Kubernetes. #11844
+* [ENHANCEMENT] SD: Add VM size label to azure service discovery. #11650
+* [ENHANCEMENT] Support native histograms in federation. #11830
+* [ENHANCEMENT] TSDB: Add gauge histogram support. #11783 #11840 #11814
+* [ENHANCEMENT] TSDB/Scrape: Support FloatHistogram that represents buckets as float64 values. #11522 #11817 #11716
+* [ENHANCEMENT] UI: Show individual scrape pools on /targets page. #11142
+
+## 2.41.0 / 2022-12-20
+
+* [FEATURE] Relabeling: Add `keepequal` and `dropequal` relabel actions. #11564
+* [FEATURE] Add support for HTTP proxy headers. #11712
+* [ENHANCEMENT] Reload private certificates when changed on disk. #11685
+* [ENHANCEMENT] Add `max_version` to specify maximum TLS version in `tls_config`. #11685
+* [ENHANCEMENT] Add `goos` and `goarch` labels to `prometheus_build_info`. #11685
+* [ENHANCEMENT] SD: Add proxy support for EC2 and LightSail SDs #11611
+* [ENHANCEMENT] SD: Add new metric `prometheus_sd_file_watcher_errors_total`. #11066
+* [ENHANCEMENT] Remote Read: Use a pool to speed up marshalling. #11357
+* [ENHANCEMENT] TSDB: Improve handling of tombstoned chunks in iterators. #11632
+* [ENHANCEMENT] TSDB: Optimize postings offset table reading. #11535
+* [BUGFIX] Scrape: Validate the metric name, label names, and label values after relabeling. #11074
+* [BUGFIX] Remote Write receiver and rule manager: Fix error handling. #11727
+
+## 2.40.7 / 2022-12-14
+
+* [BUGFIX] Use Windows native DNS resolver. #11704
+* [BUGFIX] TSDB: Fix queries involving negative buckets of native histograms. #11699
+
+## 2.40.6 / 2022-12-09
+
+* [SECURITY] Security upgrade from go and upstream dependencies that include
+  security fixes to the net/http and os packages. #11691
+
+## 2.40.5 / 2022-12-01
+
+* [BUGFIX] TSDB: Fix queries involving native histograms due to improper reset of iterators. #11643
+
+## 2.40.4 / 2022-11-29
+
+* [SECURITY] Fix basic authentication bypass vulnerability (CVE-2022-46146). GHSA-4v48-4q5m-8vx4
+
+## 2.40.3 / 2022-11-23
+
+* [BUGFIX] TSDB: Fix compaction after a deletion is called. #11623
+
 ## 2.40.2 / 2022-11-16
 
 * [BUGFIX] UI: Fix black-on-black metric name color in dark mode. #11572
@@ -24,7 +83,7 @@ Your existing histograms won't switch to native histograms until `NativeHistogra
 * [ENHANCEMENT] Kubernetes SD: Use protobuf encoding. #11353
 * [ENHANCEMENT] TSDB: Use golang.org/x/exp/slices for improved sorting speed. #11054 #11318 #11380
 * [ENHANCEMENT] Consul SD: Add enterprise admin partitions. Adds `__meta_consul_partition` label. Adds `partition` config in `consul_sd_config`. #11482
-* [BUGFIX] API: Fix API error codes for `/api/v1/labels` and `/api/v1/series`. #11356 
+* [BUGFIX] API: Fix API error codes for `/api/v1/labels` and `/api/v1/series`. #11356
 
 ## 2.39.2 / 2022-11-09
 
