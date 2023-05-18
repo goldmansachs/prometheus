@@ -76,16 +76,6 @@ go_dependencies()
 
 go_rules_dependencies()
 
-#go_register_toolchains(version = "1.18.4")
 go_register_toolchains()
 
 gazelle_dependencies()
-
-go_repository(
-    name = "org_golang_google_grpc",
-    build_file_generation = "on",
-    build_file_proto_mode = "disable",
-    importpath = "google.golang.org/grpc",
-    sum = "h1:LAv2ds7cmFV/XTS3XG1NneeENYrXGmorPxsBbptIjNc=",
-    version = "v1.53.0",
-)
