@@ -349,6 +349,8 @@ func NewTemplateExpander(
 				}
 				return float64(time.Duration(v)) / float64(time.Second), nil
 			},
+			"now":   now,
+			"now6h": now6h,
 		},
 		options: options,
 	}
