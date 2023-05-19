@@ -1586,11 +1586,11 @@ def go_dependencies():
     )
 
     go_repository(
-        name = "com_github_microsoft_go_winio",
+        name = "com_github_microsoft_go_winio", #keep
         build_file_proto_mode = "disable",
         importpath = "github.com/Microsoft/go-winio",
-        sum = "h1:slsWYD/zyx7lCXoZVlvQrj0hPTM1HI4+v1sIda2yDvg=",
-        version = "v0.6.0",
+        sum = "h1:aPJp2QD7OOrhO5tQXqQoGSJc+DjDtWTGLOmNyAm6FgY=",
+        version = "v0.5.1",
     )
     go_repository(
         name = "com_github_miekg_dns",
