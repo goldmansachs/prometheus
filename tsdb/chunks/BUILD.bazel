@@ -19,6 +19,7 @@ go_library(
         "@com_github_dennwc_varint//:varint",
         "@com_github_pkg_errors//:errors",
         "@com_github_prometheus_client_golang//prometheus",
+        "@org_golang_x_exp//slices",
         "@org_uber_go_atomic//:atomic",
     ],
 )

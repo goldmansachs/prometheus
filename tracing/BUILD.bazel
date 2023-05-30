@@ -14,13 +14,13 @@ go_library(
         "@io_opentelemetry_go_otel//:otel",
         "@io_opentelemetry_go_otel//propagation",
         "@io_opentelemetry_go_otel//semconv/v1.12.0:v1_12_0",
+        "@io_opentelemetry_go_otel//trace",
         "@io_opentelemetry_go_otel_exporters_otlp_otlptrace//:otlptrace",
         "@io_opentelemetry_go_otel_exporters_otlp_otlptrace_otlptracegrpc//:otlptracegrpc",
         "@io_opentelemetry_go_otel_exporters_otlp_otlptrace_otlptracehttp//:otlptracehttp",
         "@io_opentelemetry_go_otel_sdk//resource",
         "@io_opentelemetry_go_otel_sdk//trace",
-        "@io_opentelemetry_go_otel//trace",
-        "@org_golang_google_grpc//credentials",
+        "@org_golang_google_grpc//credentials:go_default_library",
     ],
 )
 

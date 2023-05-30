@@ -17,6 +17,7 @@ go_library(
         "//tsdb/errors",
         "//tsdb/fileutil",
         "@com_github_pkg_errors//:errors",
+        "@org_golang_x_exp//slices",
     ],
 )
 

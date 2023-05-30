@@ -13,6 +13,7 @@ go_library(
     visibility = ["//visibility:public"],
     deps = [
         "//model/exemplar",
+        "//model/histogram",
         "//model/labels",
         "//model/value",
     ],

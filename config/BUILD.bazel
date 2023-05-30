@@ -54,6 +54,7 @@ go_test(
         "//discovery/moby",
         "//discovery/nomad",
         "//discovery/openstack",
+        "//discovery/ovhcloud",
         "//discovery/puppetdb",
         "//discovery/scaleway",
         "//discovery/targetgroup",

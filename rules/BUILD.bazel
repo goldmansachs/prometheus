@@ -10,6 +10,7 @@ go_library(
     importpath = "github.com/prometheus/prometheus/rules",
     visibility = ["//visibility:public"],
     deps = [
+        "//model/histogram",
         "//model/labels",
         "//model/rulefmt",
         "//model/timestamp",
@@ -19,6 +20,7 @@ go_library(
         "//promql/parser",
         "//storage",
         "//template",
+        "//tsdb/chunkenc",
         "//util/strutil",
         "@com_github_go_kit_log//:log",
         "@com_github_go_kit_log//level",
@@ -47,6 +49,7 @@ go_test(
     ],
     embed = [":rules"],
     deps = [
+        "//model/histogram",
         "//model/labels",
         "//model/relabel",
         "//model/rulefmt",
@@ -56,6 +59,8 @@ go_test(
         "//promql",
         "//promql/parser",
         "//storage",
+        "//tsdb",
+        "//tsdb/chunkenc",
         "//util/teststorage",
         "@com_github_go_kit_log//:log",
         "@com_github_prometheus_client_golang//prometheus",

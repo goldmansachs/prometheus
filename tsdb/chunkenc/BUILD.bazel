@@ -5,11 +5,19 @@ go_library(
     srcs = [
         "bstream.go",
         "chunk.go",
+        "float_histogram.go",
+        "histogram.go",
+        "histogram_meta.go",
+        "varbit.go",
         "xor.go",
     ],
     importpath = "github.com/prometheus/prometheus/tsdb/chunkenc",
     visibility = ["//visibility:public"],
-    deps = ["@com_github_pkg_errors//:errors"],
+    deps = [
+        "//model/histogram",
+        "//model/value",
+        "@com_github_pkg_errors//:errors",
+    ],
 )
 
 alias(
@@ -23,7 +31,15 @@ go_test(
     srcs = [
         "bstream_test.go",
         "chunk_test.go",
+        "float_histogram_test.go",
+        "histogram_meta_test.go",
+        "histogram_test.go",
+        "varbit_test.go",
+        "xor_test.go",
     ],
     embed = [":chunkenc"],
-    deps = ["@com_github_stretchr_testify//require"],
+    deps = [
+        "//model/histogram",
+        "@com_github_stretchr_testify//require",
+    ],
 )

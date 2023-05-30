@@ -28,7 +28,7 @@ go_library(
 
 alias(
     name = "go_default_library",
-    actual = ":wal",
+    actual = ":wlog",
     visibility = ["//visibility:public"],
 )
 
@@ -42,6 +42,59 @@ go_test(
     ],
     embed = [":wal"],
     deps = [
+        "//model/labels",
+        "//tsdb/chunks",
+        "//tsdb/errors",
+        "//tsdb/fileutil",
+        "//tsdb/record",
+        "//util/testutil",
+        "@com_github_go_kit_log//:log",
+        "@com_github_pkg_errors//:errors",
+        "@com_github_prometheus_client_golang//prometheus",
+        "@com_github_prometheus_client_golang//prometheus/testutil",
+        "@com_github_stretchr_testify//require",
+        "@org_uber_go_goleak//:goleak",
+    ],
+)
+
+go_library(
+    name = "wlog",
+    srcs = [
+        "checkpoint.go",
+        "live_reader.go",
+        "reader.go",
+        "watcher.go",
+        "wlog.go",
+    ],
+    importpath = "github.com/prometheus/prometheus/tsdb/wlog",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//model/timestamp",
+        "//tsdb/chunks",
+        "//tsdb/errors",
+        "//tsdb/fileutil",
+        "//tsdb/record",
+        "//tsdb/tombstones",
+        "@com_github_go_kit_log//:log",
+        "@com_github_go_kit_log//level",
+        "@com_github_golang_snappy//:snappy",
+        "@com_github_pkg_errors//:errors",
+        "@com_github_prometheus_client_golang//prometheus",
+        "@org_golang_x_exp//slices",
+    ],
+)
+
+go_test(
+    name = "wlog_test",
+    srcs = [
+        "checkpoint_test.go",
+        "reader_test.go",
+        "watcher_test.go",
+        "wlog_test.go",
+    ],
+    embed = [":wlog"],
+    deps = [
+        "//model/histogram",
         "//model/labels",
         "//tsdb/chunks",
         "//tsdb/errors",

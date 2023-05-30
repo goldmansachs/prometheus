@@ -8,6 +8,7 @@ go_library(
     deps = [
         "//config",
         "//model/exemplar",
+        "//model/histogram",
         "//model/labels",
         "//model/textparse",
         "//model/timestamp",
@@ -20,6 +21,7 @@ go_library(
         "//tsdb",
         "//tsdb/index",
         "//util/httputil",
+        "//util/jsonutil",
         "//util/stats",
         "@com_github_go_kit_log//:log",
         "@com_github_go_kit_log//level",
@@ -29,6 +31,7 @@ go_library(
         "@com_github_prometheus_client_golang//prometheus",
         "@com_github_prometheus_common//model",
         "@com_github_prometheus_common//route",
+        "@org_golang_x_exp//slices",
     ],
 )
 
@@ -48,6 +51,7 @@ go_test(
     deps = [
         "//config",
         "//model/exemplar",
+        "//model/histogram",
         "//model/labels",
         "//model/textparse",
         "//model/timestamp",

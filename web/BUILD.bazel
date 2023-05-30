@@ -10,6 +10,7 @@ go_library(
     visibility = ["//visibility:public"],
     deps = [
         "//config",
+        "//model/histogram",
         "//model/labels",
         "//model/timestamp",
         "//model/value",
@@ -21,6 +22,7 @@ go_library(
         "//storage",
         "//template",
         "//tsdb",
+        "//tsdb/chunkenc",
         "//util/httputil",
         "//web/api/v1:api",
         "//web/ui",
@@ -60,7 +62,9 @@ go_test(
     embed = [":web"],
     deps = [
         "//config",
+        "//model/histogram",
         "//model/labels",
+        "//model/textparse",
         "//notifier",
         "//promql",
         "//rules",
