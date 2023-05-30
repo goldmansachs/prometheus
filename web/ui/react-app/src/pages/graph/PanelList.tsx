@@ -123,7 +123,7 @@ const PanelList: FC = () => {
   const [delta, setDelta] = useState(0);
   const [useLocalTime, setUseLocalTime] = useLocalStorage('use-local-time', false);
   const [enableQueryHistory, setEnableQueryHistory] = useLocalStorage('enable-query-history', false);
-  const [enableAutocomplete, setEnableAutocomplete] = useLocalStorage('enable-metric-autocomplete', true);
+  const [enableAutocomplete, setEnableAutocomplete] = useLocalStorage('enable-metric-autocomplete', false);
   const [enableHighlighting, setEnableHighlighting] = useLocalStorage('enable-syntax-highlighting', true);
   const [enableLinter, setEnableLinter] = useLocalStorage('enable-linter', true);
   const [clipboardMsg, setClipboardMsg] = useState<string | null>(null);
