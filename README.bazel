@@ -1,3 +1,5 @@
-  bazel run :gazelle-update-repos
-  bazel run //:gazelle
-  bazel build cmd/prometheus:prometheus
+# note you may want to use WORKSPACE.local
+# edit deps.bzl
+run :gazelle-update-repos
+bazel run //:gazelle
+bazel build cmd/prometheus:prometheus
