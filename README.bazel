@@ -1,5 +1,7 @@
 # note you may want to use WORKSPACE.local
 # edit deps.bzl
+# regenerate ui 
+# assets npm_licenses assets-compress
 run :gazelle-update-repos
 bazel run //:gazelle
 bazel build cmd/prometheus:prometheus
