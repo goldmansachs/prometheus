@@ -11,7 +11,7 @@ go_library(
     deps = [
         "@com_github_prometheus_client_golang//prometheus",
         "@io_opentelemetry_go_otel//:otel",
-        "@io_opentelemetry_go_otel//trace",
+        "@io_opentelemetry_go_otel_trace//:trace",
     ],
 )
 
