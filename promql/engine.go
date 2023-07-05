@@ -1163,7 +1163,7 @@ func (ev *evaluator) rangeEval(prepSeries func(labels.Labels, *EvalSeriesHelper)
 		enh.Ts = ts
 		result, ws := funcCall(args, bufHelpers, enh)
 		if result.ContainsSameLabelset() {
-			ev.errorf("vector cannot contain metrics with the same labelset")
+			ev.errorf(fmt.Sprintf("vector cannot contain metrics with the same labelset(range): %q", result.LabelDuplicates()))
 		}
 		enh.Out = result[:0] // Reuse result vector.
 		warnings = append(warnings, ws...)
@@ -1505,7 +1505,7 @@ func (ev *evaluator) eval(expr parser.Expr) (parser.Value, storage.Warnings) {
 		}
 
 		if mat.ContainsSameLabelset() {
-			ev.errorf("vector cannot contain metrics with the same labelset")
+			ev.errorf(fmt.Sprintf("vector cannot contain metrics with the same labelset(Call): %q", mat.LabelDuplicates()))
 		}
 
 		return mat, warnings
@@ -1524,7 +1524,7 @@ func (ev *evaluator) eval(expr parser.Expr) (parser.Value, storage.Warnings) {
 				}
 			}
 			if mat.ContainsSameLabelset() {
-				ev.errorf("vector cannot contain metrics with the same labelset")
+				ev.errorf(fmt.Sprintf("vector cannot contain metrics with the same labelset(UnaryExp): %q", mat.LabelDuplicates()))
 			}
 		}
 		return mat, ws

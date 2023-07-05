@@ -217,6 +217,28 @@ func (vec Vector) String() string {
 	return strings.Join(entries, "\n")
 }
 
+func (vec Vector) LabelDuplicates() string {
+	switch len(vec) {
+	case 0, 1:
+		return ""
+	case 2:
+		if vec[0].Metric.Hash() == vec[1].Metric.Hash() {
+			return fmt.Sprintf("%s == %s", vec[0].Metric.String(), vec[1].Metric.String())
+		}
+	default:
+		l := make(map[uint64]labels.Labels, len(vec))
+		for _, ss := range vec {
+			hash := ss.Metric.Hash()
+			if m, ok := l[hash]; ok {
+				return fmt.Sprintf("%s == %s", ss.Metric.String(),m.String())
+			}
+			l[hash] = ss.Metric
+		}
+	}
+	return ""
+}
+
+
 // ContainsSameLabelset checks if a vector has samples with the same labelset
 // Such a behavior is semantically undefined
 // https://github.com/prometheus/prometheus/issues/4562
@@ -266,6 +288,27 @@ func (m Matrix) TotalSamples() int {
 func (m Matrix) Len() int           { return len(m) }
 func (m Matrix) Less(i, j int) bool { return labels.Compare(m[i].Metric, m[j].Metric) < 0 }
 func (m Matrix) Swap(i, j int)      { m[i], m[j] = m[j], m[i] }
+
+func (m Matrix) LabelDuplicates() string {
+	switch len(m) {
+	case 0, 1:
+		return ""
+	case 2:
+		if m[0].Metric.Hash() == m[1].Metric.Hash() {
+			return fmt.Sprintf("%s == %s", m[0].Metric.String(), m[1].Metric.String()) 
+		}
+	default:
+		l := make(map[uint64]labels.Labels, len(m))
+		for _, ss := range m {
+			hash := ss.Metric.Hash()
+			if mm, ok := l[hash]; ok {
+				return fmt.Sprintf("%s == %s", ss.Metric.String(), mm.String())
+			}
+			l[hash] = ss.Metric
+		}
+	}
+	return ""
+}
 
 // ContainsSameLabelset checks if a matrix has samples with the same labelset.
 // Such a behavior is semantically undefined.
