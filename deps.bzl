@@ -1146,6 +1146,15 @@ def go_dependencies():
         version = "v1.16.0",
     )
     go_repository(
+        name = "grpc_ecosystem_grpc_gateway",
+        build_file_generation = "on",
+        build_file_proto_mode = "disable",
+        importpath = "github.com/grpc-ecosystem/grpc-gateway/v2",
+        sum = "h1:YBftPWNWd4WwGqtY2yeZL2ef8rHAxPBD8KFhJpmcqms=",
+        version = "v2.16.0",
+    )
+    
+    go_repository(
         name = "com_github_grpc_ecosystem_grpc_gateway_v2",
         build_file_generation = "on",
         build_file_proto_mode = "disable",

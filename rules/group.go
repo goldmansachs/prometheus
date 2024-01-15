@@ -17,11 +17,12 @@ import (
 	"context"
 	"errors"
 	"math"
+	"slices"
 	"strings"
 	"sync"
 	"time"
 
-	"golang.org/x/exp/slices"
+	"go.uber.org/atomic"
 
 	"github.com/go-kit/log"
 	"github.com/go-kit/log/level"
