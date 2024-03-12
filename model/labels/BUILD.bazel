@@ -4,7 +4,7 @@ go_library(
     name = "labels",
     srcs = [
         "labels.go",
-        "labels_string.go",
+        "labels_common.go",
         "matcher.go",
         "regexp.go",
         "test_utils.go",

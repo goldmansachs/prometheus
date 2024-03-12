@@ -12,6 +12,7 @@ go_library(
         "//util/treecache",
         "@com_github_go_kit_log//:log",
         "@com_github_go_zookeeper_zk//:zk",
+        "@com_github_prometheus_client_golang//prometheus",
         "@com_github_prometheus_common//model",
     ],
 )

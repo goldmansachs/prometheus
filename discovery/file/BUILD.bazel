@@ -2,7 +2,10 @@ load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
 
 go_library(
     name = "file",
-    srcs = ["file.go"],
+    srcs = [
+        "file.go",
+        "metrics.go",
+    ],
     importpath = "github.com/prometheus/prometheus/discovery/file",
     visibility = ["//visibility:public"],
     deps = [
@@ -30,7 +33,9 @@ go_test(
     srcs = ["file_test.go"],
     embed = [":file"],
     deps = [
+        "//discovery",
         "//discovery/targetgroup",
+        "@com_github_prometheus_client_golang//prometheus",
         "@com_github_prometheus_common//model",
         "@com_github_stretchr_testify//require",
         "@org_uber_go_goleak//:goleak",

@@ -6,9 +6,11 @@ go_library(
         "float_histogram.go",
         "generic.go",
         "histogram.go",
+        "test_utils.go",
     ],
     importpath = "github.com/prometheus/prometheus/model/histogram",
     visibility = ["//visibility:public"],
+    deps = ["@org_golang_x_exp//slices"],
 )
 
 alias(
@@ -25,5 +27,9 @@ go_test(
         "histogram_test.go",
     ],
     embed = [":histogram"],
-    deps = ["@com_github_stretchr_testify//require"],
+    deps = [
+        "//model/value",
+        "@com_github_stretchr_testify//require",
+        "@org_golang_x_exp//slices",
+    ],
 )

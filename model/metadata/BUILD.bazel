@@ -5,7 +5,7 @@ go_library(
     srcs = ["metadata.go"],
     importpath = "github.com/prometheus/prometheus/model/metadata",
     visibility = ["//visibility:public"],
-    deps = ["//model/textparse"],
+    deps = ["@com_github_prometheus_common//model"],
 )
 
 alias(

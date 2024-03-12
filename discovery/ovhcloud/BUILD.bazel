@@ -4,6 +4,7 @@ go_library(
     name = "ovhcloud",
     srcs = [
         "dedicated_server.go",
+        "metrics.go",
         "ovhcloud.go",
         "vps.go",
     ],
@@ -16,6 +17,7 @@ go_library(
         "@com_github_go_kit_log//:log",
         "@com_github_go_kit_log//level",
         "@com_github_ovh_go_ovh//ovh",
+        "@com_github_prometheus_client_golang//prometheus",
         "@com_github_prometheus_common//config",
         "@com_github_prometheus_common//model",
     ],
@@ -40,6 +42,7 @@ go_test(
         "//discovery",
         "//util/testutil",
         "@com_github_go_kit_log//:log",
+        "@com_github_prometheus_client_golang//prometheus",
         "@com_github_prometheus_common//config",
         "@com_github_prometheus_common//model",
         "@com_github_stretchr_testify//require",

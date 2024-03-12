@@ -4,6 +4,7 @@ go_library(
     name = "ionos",
     srcs = [
         "ionos.go",
+        "metrics.go",
         "server.go",
     ],
     importpath = "github.com/prometheus/prometheus/discovery/ionos",
@@ -15,7 +16,7 @@ go_library(
         "//util/strutil",
         "@com_github_go_kit_log//:log",
         "@com_github_ionos_cloud_sdk_go_v6//:sdk-go",
-        "@com_github_pkg_errors//:errors",
+        "@com_github_prometheus_client_golang//prometheus",
         "@com_github_prometheus_common//config",
         "@com_github_prometheus_common//model",
         "@com_github_prometheus_common//version",

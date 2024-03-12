@@ -1,0 +1,30 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "prometheusremotewrite",
+    srcs = [
+        "helper.go",
+        "histograms.go",
+        "metrics_to_prw.go",
+        "number_data_points.go",
+    ],
+    importpath = "github.com/prometheus/prometheus/storage/remote/otlptranslator/prometheusremotewrite",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//model/timestamp",
+        "//model/value",
+        "//prompb",
+        "//storage/remote/otlptranslator/prometheus",
+        "@com_github_prometheus_common//model",
+        "@io_opentelemetry_go_collector_pdata//pcommon:go_default_library",
+        "@io_opentelemetry_go_collector_pdata//pmetric:go_default_library",
+        "@io_opentelemetry_go_collector_semconv//v1.6.1:go_default_library",
+        "@org_uber_go_multierr//:multierr",
+    ],
+)
+
+alias(
+    name = "go_default_library",
+    actual = ":prometheusremotewrite",
+    visibility = ["//visibility:public"],
+)

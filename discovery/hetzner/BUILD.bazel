@@ -5,6 +5,7 @@ go_library(
     srcs = [
         "hcloud.go",
         "hetzner.go",
+        "metrics.go",
         "robot.go",
     ],
     importpath = "github.com/prometheus/prometheus/discovery/hetzner",
@@ -15,7 +16,8 @@ go_library(
         "//discovery/targetgroup",
         "//util/strutil",
         "@com_github_go_kit_log//:log",
-        "@com_github_hetznercloud_hcloud_go//hcloud",
+        "@com_github_hetznercloud_hcloud_go//v2/hcloud",
+        "@com_github_prometheus_client_golang//prometheus",
         "@com_github_prometheus_common//config",
         "@com_github_prometheus_common//model",
         "@com_github_prometheus_common//version",

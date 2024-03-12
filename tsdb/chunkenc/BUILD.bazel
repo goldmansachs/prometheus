@@ -16,7 +16,6 @@ go_library(
     deps = [
         "//model/histogram",
         "//model/value",
-        "@com_github_pkg_errors//:errors",
     ],
 )
 
@@ -40,6 +39,7 @@ go_test(
     embed = [":chunkenc"],
     deps = [
         "//model/histogram",
+        "//tsdb/tsdbutil",
         "@com_github_stretchr_testify//require",
     ],
 )

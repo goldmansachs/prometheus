@@ -6,10 +6,10 @@ go_library(
     importpath = "github.com/prometheus/prometheus/discovery/refresh",
     visibility = ["//visibility:public"],
     deps = [
+        "//discovery",
         "//discovery/targetgroup",
         "@com_github_go_kit_log//:log",
         "@com_github_go_kit_log//level",
-        "@com_github_prometheus_client_golang//prometheus",
     ],
 )
 
@@ -24,7 +24,9 @@ go_test(
     srcs = ["refresh_test.go"],
     embed = [":refresh"],
     deps = [
+        "//discovery",
         "//discovery/targetgroup",
+        "@com_github_prometheus_client_golang//prometheus",
         "@com_github_prometheus_common//model",
         "@com_github_stretchr_testify//require",
         "@org_uber_go_goleak//:goleak",

@@ -5,6 +5,7 @@ go_library(
     srcs = [
         "hypervisor.go",
         "instance.go",
+        "metrics.go",
         "openstack.go",
     ],
     importpath = "github.com/prometheus/prometheus/discovery/openstack",
@@ -23,6 +24,7 @@ go_library(
         "@com_github_gophercloud_gophercloud//openstack/compute/v2/servers",
         "@com_github_gophercloud_gophercloud//pagination",
         "@com_github_mwitkow_go_conntrack//:go-conntrack",
+        "@com_github_prometheus_client_golang//prometheus",
         "@com_github_prometheus_common//config",
         "@com_github_prometheus_common//model",
     ],

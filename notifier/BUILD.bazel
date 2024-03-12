@@ -18,6 +18,7 @@ go_library(
         "@com_github_prometheus_common//config",
         "@com_github_prometheus_common//model",
         "@com_github_prometheus_common//version",
+        "@com_github_prometheus_common_sigv4//:sigv4",
         "@org_uber_go_atomic//:atomic",
     ],
 )

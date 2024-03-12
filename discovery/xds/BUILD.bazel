@@ -6,6 +6,7 @@ go_library(
         "client.go",
         "kuma.go",
         "kuma_mads.pb.go",
+        "metrics.go",
         "xds.go",
     ],
     importpath = "github.com/prometheus/prometheus/discovery/xds",
@@ -49,6 +50,7 @@ go_test(
     ],
     embed = [":xds"],
     deps = [
+        "//discovery",
         "//discovery/targetgroup",
         "@com_github_envoyproxy_go_control_plane//envoy/service/discovery/v3:discovery",
         "@com_github_go_kit_log//:log",

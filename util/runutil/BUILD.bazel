@@ -1,15 +1,14 @@
 load("@io_bazel_rules_go//go:def.bzl", "go_library")
 
 go_library(
-    name = "encoding",
-    srcs = ["encoding.go"],
-    importpath = "github.com/prometheus/prometheus/tsdb/encoding",
+    name = "runutil",
+    srcs = ["runutil.go"],
+    importpath = "github.com/prometheus/prometheus/util/runutil",
     visibility = ["//visibility:public"],
-    deps = ["@com_github_dennwc_varint//:varint"],
 )
 
 alias(
     name = "go_default_library",
-    actual = ":encoding",
+    actual = ":runutil",
     visibility = ["//visibility:public"],
 )

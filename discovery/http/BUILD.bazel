@@ -2,7 +2,10 @@ load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
 
 go_library(
     name = "http",
-    srcs = ["http.go"],
+    srcs = [
+        "http.go",
+        "metrics.go",
+    ],
     importpath = "github.com/prometheus/prometheus/discovery/http",
     visibility = ["//visibility:public"],
     deps = [
@@ -29,6 +32,7 @@ go_test(
     srcs = ["http_test.go"],
     embed = [":http"],
     deps = [
+        "//discovery",
         "//discovery/targetgroup",
         "@com_github_go_kit_log//:log",
         "@com_github_prometheus_client_golang//prometheus",

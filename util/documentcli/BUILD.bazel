@@ -5,7 +5,10 @@ go_library(
     srcs = ["documentcli.go"],
     importpath = "github.com/prometheus/prometheus/util/documentcli",
     visibility = ["//visibility:public"],
-    deps = ["@com_github_alecthomas_kingpin_v2//:kingpin"],
+    deps = [
+        "@com_github_alecthomas_kingpin_v2//:kingpin",
+        "@com_github_grafana_regexp//:regexp",
+    ],
 )
 
 alias(

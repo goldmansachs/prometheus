@@ -16,6 +16,7 @@ go_library(
         "mmap.go",
         "mmap_386.go",
         "mmap_amd64.go",
+        "mmap_arm64.go",
         "mmap_js.go",
         "mmap_unix.go",
         "mmap_windows.go",
@@ -29,9 +30,7 @@ go_library(
     ],
     importpath = "github.com/prometheus/prometheus/tsdb/fileutil",
     visibility = ["//visibility:public"],
-    deps = [
-        "@com_github_pkg_errors//:errors",
-    ] + select({
+    deps = select({
         "@io_bazel_rules_go//go/platform:aix": [
             "@org_golang_x_sys//unix",
         ],

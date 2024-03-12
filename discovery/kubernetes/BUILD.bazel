@@ -3,13 +3,13 @@ load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
 go_library(
     name = "kubernetes",
     srcs = [
-        "client_metrics.go",
         "endpoints.go",
         "endpointslice.go",
         "endpointslice_adaptor.go",
         "ingress.go",
         "ingress_adaptor.go",
         "kubernetes.go",
+        "metrics.go",
         "node.go",
         "pod.go",
         "service.go",
@@ -42,7 +42,6 @@ go_library(
         "@io_k8s_client_go//rest",
         "@io_k8s_client_go//tools/cache",
         "@io_k8s_client_go//tools/clientcmd",
-        "@io_k8s_client_go//tools/metrics",
         "@io_k8s_client_go//util/workqueue",
     ],
 )
@@ -71,6 +70,7 @@ go_test(
         "//discovery/targetgroup",
         "//util/testutil",
         "@com_github_go_kit_log//:log",
+        "@com_github_prometheus_client_golang//prometheus",
         "@com_github_prometheus_common//model",
         "@com_github_stretchr_testify//require",
         "@io_k8s_api//core/v1:core",

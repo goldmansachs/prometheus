@@ -19,7 +19,7 @@ go_library(
         "//model/value",
         "//prompb/io/prometheus/client",
         "@com_github_gogo_protobuf//proto",
-        "@com_github_pkg_errors//:errors",
+        "@com_github_gogo_protobuf//types",
         "@com_github_prometheus_common//model",
     ],
 )

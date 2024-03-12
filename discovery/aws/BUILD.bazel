@@ -5,6 +5,8 @@ go_library(
     srcs = [
         "ec2.go",
         "lightsail.go",
+        "metrics_ec2.go",
+        "metrics_lightsail.go",
     ],
     importpath = "github.com/prometheus/prometheus/discovery/aws",
     visibility = ["//visibility:public"],
@@ -23,6 +25,7 @@ go_library(
         "@com_github_aws_aws_sdk_go//service/lightsail",
         "@com_github_go_kit_log//:log",
         "@com_github_go_kit_log//level",
+        "@com_github_prometheus_client_golang//prometheus",
         "@com_github_prometheus_common//config",
         "@com_github_prometheus_common//model",
     ],

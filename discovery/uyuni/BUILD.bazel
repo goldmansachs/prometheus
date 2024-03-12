@@ -2,7 +2,10 @@ load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
 
 go_library(
     name = "uyuni",
-    srcs = ["uyuni.go"],
+    srcs = [
+        "metrics.go",
+        "uyuni.go",
+    ],
     importpath = "github.com/prometheus/prometheus/discovery/uyuni",
     visibility = ["//visibility:public"],
     deps = [
@@ -11,6 +14,7 @@ go_library(
         "//discovery/targetgroup",
         "@com_github_go_kit_log//:log",
         "@com_github_kolo_xmlrpc//:xmlrpc",
+        "@com_github_prometheus_client_golang//prometheus",
         "@com_github_prometheus_common//config",
         "@com_github_prometheus_common//model",
     ],
@@ -27,7 +31,9 @@ go_test(
     srcs = ["uyuni_test.go"],
     embed = [":uyuni"],
     deps = [
+        "//discovery",
         "//discovery/targetgroup",
+        "@com_github_prometheus_client_golang//prometheus",
         "@com_github_stretchr_testify//require",
     ],
 )

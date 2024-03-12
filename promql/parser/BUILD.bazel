@@ -15,9 +15,11 @@ go_library(
     importpath = "github.com/prometheus/prometheus/promql/parser",
     visibility = ["//visibility:public"],
     deps = [
+        "//model/histogram",
         "//model/labels",
         "//model/timestamp",
         "//model/value",
+        "//promql/parser/posrange",
         "//storage",
         "//util/strutil",
         "@com_github_prometheus_common//model",
@@ -40,7 +42,9 @@ go_test(
     ],
     embed = [":parser"],
     deps = [
+        "//model/histogram",
         "//model/labels",
+        "//promql/parser/posrange",
         "@com_github_prometheus_common//model",
         "@com_github_stretchr_testify//require",
     ],
