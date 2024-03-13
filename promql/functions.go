@@ -1727,6 +1727,6 @@ func stringSliceFromArgs(args parser.Expressions) []string {
 // === hs_prometheus_start_time() float64 ===
 var gsProcessStartTime = time.Now().Unix()
 
-func funcGsPrometheusStartTime(vals []parser.Value, args parser.Expressions, enh *EvalNodeHelper) Vector {
-	return Vector{Sample{F: float64(gsProcessStartTime)}}
+func funcGsPrometheusStartTime(vals []parser.Value, args parser.Expressions, enh *EvalNodeHelper)  (Vector, annotations.Annotations) {
+	return Vector{Sample{F: float64(gsProcessStartTime)}}, nil
 }
