@@ -16,7 +16,7 @@ go_library(
         "//discovery/targetgroup",
         "//util/strutil",
         "@com_github_go_kit_log//:log",
-        "@com_github_hetznercloud_hcloud_go_v2/hcloud",
+        "@com_github_hetznercloud_hcloud_go_v2//hcloud",
         "@com_github_prometheus_client_golang//prometheus",
         "@com_github_prometheus_common//config",
         "@com_github_prometheus_common//model",
