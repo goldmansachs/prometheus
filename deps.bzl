@@ -920,13 +920,13 @@ def go_dependencies():
         sum = "h1:kFkMAZBNAn4j7K0GiZr8cRYzejq68VbheufiV3YuyFI=",
         version = "v1.1.0",
     )
-    go_repository(
-        name = "com_github_gogo_protobuf",
-        build_file_proto_mode = "disable",
-        importpath = "github.com/gogo/protobuf",
-        sum = "h1:Ov1cvc58UF3b5XjBnZv7+opcTcQFZebYjWzi34vdm4Q=",
-        version = "v1.3.2",
-    )
+    #go_repository(
+    #    name = "com_github_gogo_protobuf",
+    #    build_file_proto_mode = "disable",
+    #    importpath = "github.com/gogo/protobuf",
+    #    sum = "h1:Ov1cvc58UF3b5XjBnZv7+opcTcQFZebYjWzi34vdm4Q=",
+    #    version = "v1.3.2",
+    #)
     go_repository(
         name = "com_github_golang_glog",
         build_file_proto_mode = "disable",
@@ -1803,8 +1803,8 @@ def go_dependencies():
         name = "com_github_nats_io_jwt",
         build_file_proto_mode = "disable",
         importpath = "github.com/nats-io/jwt",
-        sum = "h1:+RB5hMpXUUA2dfxuhBTEkMOrYmM+gKIZYS1KjSostMI=",
-        version = "v0.3.2",
+        sum = "h1:w3GMTO969dFg+UOKTmmyuu7IGdusK+7Ytlt//OYH/uU=",
+        version = "v1.2.2",
     )
     go_repository(
         name = "com_github_nats_io_jwt_v2",
@@ -1824,8 +1824,8 @@ def go_dependencies():
         name = "com_github_nats_io_nats_server_v2",
         build_file_proto_mode = "disable",
         importpath = "github.com/nats-io/nats-server/v2",
-        sum = "h1:wsnVaaXH9VRSg+A2MVg5Q727/CqxnmPLGFQ3YZYKTQg=",
-        version = "v2.5.0",
+        sum = "h1:USQ91yDrsRohuEAW8vJpal7Z9p+EWTGk53wchamzqFo=",
+	version = "v2.9.25",
     )
     go_repository(
         name = "com_github_nats_io_nkeys",
