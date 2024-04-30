@@ -1,0 +1,51 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "ovhcloud",
+    srcs = [
+        "dedicated_server.go",
+        "metrics.go",
+        "ovhcloud.go",
+        "vps.go",
+    ],
+    importpath = "github.com/prometheus/prometheus/discovery/ovhcloud",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//discovery",
+        "//discovery/refresh",
+        "//discovery/targetgroup",
+        "@com_github_go_kit_log//:log",
+        "@com_github_go_kit_log//level",
+        "@com_github_ovh_go_ovh//ovh",
+        "@com_github_prometheus_client_golang//prometheus",
+        "@com_github_prometheus_common//config",
+        "@com_github_prometheus_common//model",
+    ],
+)
+
+alias(
+    name = "go_default_library",
+    actual = ":ovhcloud",
+    visibility = ["//visibility:public"],
+)
+
+go_test(
+    name = "ovhcloud_test",
+    srcs = [
+        "dedicated_server_test.go",
+        "ovhcloud_test.go",
+        "vps_test.go",
+    ],
+    data = glob(["testdata/**"]),
+    embed = [":ovhcloud"],
+    deps = [
+        "//discovery",
+        "//util/testutil",
+        "@com_github_go_kit_log//:log",
+        "@com_github_prometheus_client_golang//prometheus",
+        "@com_github_prometheus_common//config",
+        "@com_github_prometheus_common//model",
+        "@com_github_stretchr_testify//require",
+        "@in_gopkg_yaml_v2//:yaml_v2",
+    ],
+)

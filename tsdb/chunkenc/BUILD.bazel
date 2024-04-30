@@ -1,0 +1,45 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "chunkenc",
+    srcs = [
+        "bstream.go",
+        "chunk.go",
+        "float_histogram.go",
+        "histogram.go",
+        "histogram_meta.go",
+        "varbit.go",
+        "xor.go",
+    ],
+    importpath = "github.com/prometheus/prometheus/tsdb/chunkenc",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//model/histogram",
+        "//model/value",
+    ],
+)
+
+alias(
+    name = "go_default_library",
+    actual = ":chunkenc",
+    visibility = ["//visibility:public"],
+)
+
+go_test(
+    name = "chunkenc_test",
+    srcs = [
+        "bstream_test.go",
+        "chunk_test.go",
+        "float_histogram_test.go",
+        "histogram_meta_test.go",
+        "histogram_test.go",
+        "varbit_test.go",
+        "xor_test.go",
+    ],
+    embed = [":chunkenc"],
+    deps = [
+        "//model/histogram",
+        "//tsdb/tsdbutil",
+        "@com_github_stretchr_testify//require",
+    ],
+)

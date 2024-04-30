@@ -1,0 +1,51 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "azure",
+    srcs = [
+        "azure.go",
+        "metrics.go",
+    ],
+    importpath = "github.com/prometheus/prometheus/discovery/azure",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//discovery",
+        "//discovery/refresh",
+        "//discovery/targetgroup",
+        "//util/strutil",
+        "@com_github_azure_azure_sdk_for_go_sdk_azcore//:azcore",
+        "@com_github_azure_azure_sdk_for_go_sdk_azcore//arm",
+        "@com_github_azure_azure_sdk_for_go_sdk_azcore//cloud",
+        "@com_github_azure_azure_sdk_for_go_sdk_azcore//policy",
+        "@com_github_azure_azure_sdk_for_go_sdk_azcore//to",
+        "@com_github_azure_azure_sdk_for_go_sdk_azidentity//:azidentity",
+        "@com_github_azure_azure_sdk_for_go_sdk_resourcemanager_compute_armcompute_v5//:armcompute",
+        "@com_github_azure_azure_sdk_for_go_sdk_resourcemanager_network_armnetwork_v4//:armnetwork",
+        "@com_github_code_hex_go_generics_cache//:go-generics-cache",
+        "@com_github_code_hex_go_generics_cache//policy/lru",
+        "@com_github_go_kit_log//:log",
+        "@com_github_go_kit_log//level",
+        "@com_github_prometheus_client_golang//prometheus",
+        "@com_github_prometheus_common//config",
+        "@com_github_prometheus_common//model",
+        "@com_github_prometheus_common//version",
+    ],
+)
+
+alias(
+    name = "go_default_library",
+    actual = ":azure",
+    visibility = ["//visibility:public"],
+)
+
+go_test(
+    name = "azure_test",
+    srcs = ["azure_test.go"],
+    embed = [":azure"],
+    deps = [
+        "@com_github_azure_azure_sdk_for_go_sdk_azcore//arm",
+        "@com_github_azure_azure_sdk_for_go_sdk_resourcemanager_compute_armcompute_v5//:armcompute",
+        "@com_github_stretchr_testify//require",
+        "@org_uber_go_goleak//:goleak",
+    ],
+)

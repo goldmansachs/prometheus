@@ -1,0 +1,37 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "record",
+    srcs = ["record.go"],
+    importpath = "github.com/prometheus/prometheus/tsdb/record",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//model/histogram",
+        "//model/labels",
+        "//storage",
+        "//tsdb/chunks",
+        "//tsdb/encoding",
+        "//tsdb/tombstones",
+        "@com_github_prometheus_common//model",
+    ],
+)
+
+alias(
+    name = "go_default_library",
+    actual = ":record",
+    visibility = ["//visibility:public"],
+)
+
+go_test(
+    name = "record_test",
+    srcs = ["record_test.go"],
+    embed = [":record"],
+    deps = [
+        "//model/histogram",
+        "//model/labels",
+        "//tsdb/encoding",
+        "//tsdb/tombstones",
+        "//util/testutil",
+        "@com_github_stretchr_testify//require",
+    ],
+)

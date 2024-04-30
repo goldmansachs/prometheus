@@ -1,0 +1,18 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "documentcli",
+    srcs = ["documentcli.go"],
+    importpath = "github.com/prometheus/prometheus/util/documentcli",
+    visibility = ["//visibility:public"],
+    deps = [
+        "@com_github_alecthomas_kingpin_v2//:kingpin",
+        "@com_github_grafana_regexp//:regexp",
+    ],
+)
+
+alias(
+    name = "go_default_library",
+    actual = ":documentcli",
+    visibility = ["//visibility:public"],
+)

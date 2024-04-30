@@ -1,0 +1,45 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "consul",
+    srcs = [
+        "consul.go",
+        "metrics.go",
+    ],
+    importpath = "github.com/prometheus/prometheus/discovery/consul",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//discovery",
+        "//discovery/targetgroup",
+        "//util/strutil",
+        "@com_github_go_kit_log//:log",
+        "@com_github_go_kit_log//level",
+        "@com_github_hashicorp_consul_api//:api",
+        "@com_github_prometheus_client_golang//prometheus",
+        "@com_github_prometheus_common//config",
+        "@com_github_prometheus_common//model",
+    ],
+)
+
+alias(
+    name = "go_default_library",
+    actual = ":consul",
+    visibility = ["//visibility:public"],
+)
+
+go_test(
+    name = "consul_test",
+    srcs = ["consul_test.go"],
+    embed = [":consul"],
+    deps = [
+        "//discovery",
+        "//discovery/targetgroup",
+        "@com_github_go_kit_log//:log",
+        "@com_github_prometheus_client_golang//prometheus",
+        "@com_github_prometheus_common//config",
+        "@com_github_prometheus_common//model",
+        "@com_github_stretchr_testify//require",
+        "@in_gopkg_yaml_v2//:yaml_v2",
+        "@org_uber_go_goleak//:goleak",
+    ],
+)

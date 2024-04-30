@@ -1,0 +1,19 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "client",
+    srcs = ["metrics.pb.go"],
+    importpath = "github.com/prometheus/prometheus/prompb/io/prometheus/client",
+    visibility = ["//visibility:public"],
+    deps = [
+        "@com_github_gogo_protobuf//gogoproto:go_default_library",
+        "@com_github_gogo_protobuf//proto:go_default_library",
+        "@com_github_gogo_protobuf//types:go_default_library",
+    ],
+)
+
+alias(
+    name = "go_default_library",
+    actual = ":client",
+    visibility = ["//visibility:public"],
+)
