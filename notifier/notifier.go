@@ -376,7 +376,7 @@ func (n *Manager) Send(alerts ...*Alert) {
 				d = nd
 			}
 		}
-		droppedAlerts := n.queue[d:]
+		droppedAlerts := n.queue[:d]
 		n.queue = n.queue[d:]
 		go processDroppedAlerts(droppedAlerts, n.logger)
 
