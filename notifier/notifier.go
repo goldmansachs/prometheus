@@ -359,7 +359,6 @@ func (n *Manager) Send(alerts ...*Alert) {
 	// batch could be.
 	if d := len(alerts) - n.opts.QueueCapacity; d > 0 {
 		alerts = alerts[d:]
-
 		level.Warn(n.logger).Log("msg", "Alert batch larger than queue capacity, dropping alerts", "num_dropped", d)
 		n.metrics.dropped.Add(float64(d))
 	}
@@ -367,7 +366,19 @@ func (n *Manager) Send(alerts ...*Alert) {
 	// If the queue is full, remove the oldest alerts in favor
 	// of newer ones.
 	if d := (len(n.queue) + len(alerts)) - n.opts.QueueCapacity; d > 0 {
+		oldLen := len(n.queue)
+		newLen, newQueue := dedupQueue(n.queue, alerts)
+		if newLen < oldLen {
+			level.Warn(n.logger).Log("msg", "Deduplication removed alerts", "num_removed", oldLen-newLen)
+			n.queue = newQueue
+			nd := (len(n.queue) + len(alerts)) - n.opts.QueueCapacity
+			if nd > 0 {
+				d = nd
+			}
+		}
+		droppedAlerts := n.queue[d:]
 		n.queue = n.queue[d:]
+		go processDroppedAlerts(droppedAlerts, n.logger)
 
 		level.Warn(n.logger).Log("msg", "Alert notification queue full, dropping alerts", "num_dropped", d)
 		n.metrics.dropped.Add(float64(d))
@@ -376,6 +387,33 @@ func (n *Manager) Send(alerts ...*Alert) {
 
 	// Notify sending goroutine that there are alerts to be processed.
 	n.setMore()
+}
+
+func processDroppedAlerts(alerts []*Alert, logger log.Logger) {
+	alertMap := make(map[string]uint64)
+	for _, a := range alerts {
+		alertMap[a.Name()]++
+	}
+	for name, count := range alertMap {
+		level.Warn(logger).Log("msg", "Dropped alerts", "alertname", name, "num_dropped", count)
+	}
+}
+
+// deduptQueue removes duplicates from the queue and returns the new queue.
+func dedupQueue(queue []*Alert, alerts []*Alert) (int, []*Alert) {
+	alertMap := make(map[uint64]*Alert)
+	for _, a := range queue {
+		alertMap[a.Hash()] = a
+	}
+	for _, a := range alerts {
+		// remove duplicates
+		delete(alertMap, a.Hash())
+	}
+	newQueue := make([]*Alert, 0, len(alertMap))
+	for _, a := range alertMap {
+		newQueue = append(newQueue, a)
+	}
+	return len(newQueue), newQueue
 }
 
 func relabelAlerts(relabelConfigs []*relabel.Config, externalLabels labels.Labels, alerts []*Alert) []*Alert {
