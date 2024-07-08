@@ -410,8 +410,10 @@ func dedupQueue(queue []*Alert, alerts []*Alert) (int, []*Alert) {
 		delete(alertMap, a.Hash())
 	}
 	newQueue := make([]*Alert, 0, len(alertMap))
-	for _, a := range alertMap {
-		newQueue = append(newQueue, a)
+	for _, a := range queue {
+		if _, ok := alertMap[a.Hash()]; ok {
+			newQueue = append(newQueue, a)
+		}
 	}
 	return len(newQueue), newQueue
 }
