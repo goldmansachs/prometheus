@@ -116,6 +116,7 @@ type Manager struct {
 	cancel func()
 
 	alertmanagers map[string]*alertmanagerSet
+	dynamicAlertmanagers map[string]*alertmanagerSet
 	logger        log.Logger
 }
 
@@ -138,6 +139,7 @@ type alertMetrics struct {
 	queueLength             prometheus.GaugeFunc
 	queueCapacity           prometheus.Gauge
 	alertmanagersDiscovered prometheus.GaugeFunc
+	offline                 *prometheus.GaugeVec
 }
 
 func newAlertMetrics(r prometheus.Registerer, queueCap int, queueLen, alertmanagersDiscovered func() float64) *alertMetrics {
@@ -189,6 +191,15 @@ func newAlertMetrics(r prometheus.Registerer, queueCap int, queueLen, alertmanag
 			Name: "prometheus_notifications_alertmanagers_discovered",
 			Help: "The number of alertmanagers discovered and active.",
 		}, alertmanagersDiscovered),
+		offline: prometheus.NewGaugeVec(prometheus.GaugeOpts{
+			Namespace: namespace,
+			Subsystem: subsystem,
+			Name: "prometheus_notifications_alertmanagers_offline",
+			Help: "The number of alertmanagers that are offline.",
+		},
+			[]string{alertmanagerLabel},
+		),	
+		
 	}
 
 	m.queueCapacity.Set(float64(queueCap))
@@ -202,6 +213,7 @@ func newAlertMetrics(r prometheus.Registerer, queueCap int, queueLen, alertmanag
 			m.queueLength,
 			m.queueCapacity,
 			m.alertmanagersDiscovered,
+			m.offline,
 		)
 	}
 
@@ -248,6 +260,110 @@ func NewManager(o *Options, logger log.Logger) *Manager {
 	return n
 }
 
+// startChecking checks all alertmanages if they are alive.
+func (n *Manager) startChecking() {
+	for {
+		select {
+		case <-n.ctx.Done():
+			return
+		case <-time.After(1 * time.Minute):
+			n.checkAlertmanagers()
+		}
+	}
+}
+
+func (n *Manager) checkAlertmanagers() {
+	n.mtx.RLock()
+	alertmanagers := make(map[string]*alertmanagerSet, len(n.alertmanagers))
+	for k, v := range n.alertmanagers {
+		alertmanagers[k] = v
+	}
+	n.mtx.RUnlock()
+	var wg sync.WaitGroup
+	for id, ams := range alertmanagers {
+		wg.Add(1)
+		go func(id string, ams *alertmanagerSet) {
+			defer wg.Done()
+			select {
+			case <-n.ctx.Done():
+				return
+			default:
+				ams.mtx.RLock()
+				var activeAms []alertmanager
+				var innerWg sync.WaitGroup
+				results := make(chan alertmanager, len(ams.ams))
+				for _, am := range ams.ams {
+					innerWg.Add(1)
+					go func(am alertmanager) {
+						defer innerWg.Done()
+						select {
+						case <-n.ctx.Done():
+							return
+						default:
+							timeout := time.Duration(ams.cfg.Timeout)
+							if n.isAlertmanagerActive(am.url(), timeout) {
+								results <- am
+							}
+						}
+					}(am)
+				}
+
+				go func() {
+					innerWg.Wait()
+					close(results)
+				}()
+
+				for am := range results {
+					activeAms = append(activeAms, am)
+				}
+				n.metrics.offline.WithLabelValues(id).Set(float64(len(ams.ams) - len(activeAms)))
+				ams.mtx.RUnlock()
+				n.mtx.Lock()
+				dams, ok := n.dynamicAlertmanagers[id]
+				n.mtx.Unlock()
+				if !ok {
+					return
+				}
+
+				// Update the active alertmanagers
+				dams.mtx.Lock()
+				if len(activeAms) == 0 {
+					dams.mtx.Unlock()
+					return
+				}
+				if len(activeAms) != len(dams.ams) {
+					dams.ams = activeAms
+				} else {
+					same := true
+					for i := range activeAms {
+						if activeAms[i].url().String() != dams.ams[i].url().String() {
+							same = false
+							break
+						}
+					}
+					if !same {
+						dams.ams = activeAms
+					}
+				}
+				dams.mtx.Unlock()
+			}
+		}(id, ams)
+	}
+	wg.Wait()
+}
+
+func (n *Manager) isAlertmanagerActive(u *url.URL, timeout time.Duration) bool {
+	client := &http.Client{
+		Timeout: timeout,
+	}
+	u.Path = path.Join(u.Path, "/-/healthy")
+	resp, err := client.Get(u.String())
+	if err != nil || resp.StatusCode != http.StatusOK {
+		return false
+	}
+	return true
+}
+
 // ApplyConfig updates the status state as the new config requires.
 func (n *Manager) ApplyConfig(conf *config.Config) error {
 	n.mtx.Lock()
@@ -268,6 +384,7 @@ func (n *Manager) ApplyConfig(conf *config.Config) error {
 	}
 
 	n.alertmanagers = amSets
+	n.dynamicAlertmanagers = amSets
 
 	return nil
 }
@@ -300,6 +417,7 @@ func (n *Manager) nextBatch() []*Alert {
 
 // Run dispatches notifications continuously.
 func (n *Manager) Run(tsets <-chan map[string][]*targetgroup.Group) {
+	go n.startChecking()
 	for {
 		// The select is split in two parts, such as we will first try to read
 		// new alertmanager targets if they are available, before sending new
@@ -341,7 +459,10 @@ func (n *Manager) reload(tgs map[string][]*targetgroup.Group) {
 			continue
 		}
 		am.sync(tgroup)
-	}
+		dam, ok := n.dynamicAlertmanagers[id]
+		if ok {
+			dam.sync(tgroup)
+		}
 }
 
 // Send queues the given notification requests for processing.
@@ -453,7 +574,10 @@ func (n *Manager) setMore() {
 // Alertmanagers returns a slice of Alertmanager URLs.
 func (n *Manager) Alertmanagers() []*url.URL {
 	n.mtx.RLock()
-	amSets := n.alertmanagers
+	amSets := make(map[string]*alertmanagerSet, len(n.alertmanagers))
+	for k, v := range n.alertmanagers {
+		amSets[k] = v
+	}
 	n.mtx.RUnlock()
 
 	var res []*url.URL
@@ -503,7 +627,7 @@ func (n *Manager) sendAll(alerts ...*Alert) bool {
 	var v1Payload, v2Payload []byte
 
 	n.mtx.RLock()
-	amSets := n.alertmanagers
+	amSets := n.dynamicAlertmanagers
 	n.mtx.RUnlock()
 
 	var (
