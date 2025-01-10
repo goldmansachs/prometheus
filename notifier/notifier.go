@@ -115,9 +115,9 @@ type Manager struct {
 	ctx    context.Context
 	cancel func()
 
-	alertmanagers map[string]*alertmanagerSet
+	alertmanagers        map[string]*alertmanagerSet
 	dynamicAlertmanagers map[string]*alertmanagerSet
-	logger        log.Logger
+	logger               log.Logger
 }
 
 // Options are the configurable parameters of a Handler.
@@ -194,12 +194,11 @@ func newAlertMetrics(r prometheus.Registerer, queueCap int, queueLen, alertmanag
 		offline: prometheus.NewGaugeVec(prometheus.GaugeOpts{
 			Namespace: namespace,
 			Subsystem: subsystem,
-			Name: "prometheus_notifications_alertmanagers_offline",
-			Help: "The number of alertmanagers that are offline.",
+			Name:      "prometheus_notifications_alertmanagers_offline",
+			Help:      "The number of alertmanagers that are offline.",
 		},
 			[]string{alertmanagerLabel},
-		),	
-		
+		),
 	}
 
 	m.queueCapacity.Set(float64(queueCap))
@@ -463,6 +462,7 @@ func (n *Manager) reload(tgs map[string][]*targetgroup.Group) {
 		if ok {
 			dam.sync(tgroup)
 		}
+	}
 }
 
 // Send queues the given notification requests for processing.
