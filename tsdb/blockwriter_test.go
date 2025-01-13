@@ -19,17 +19,18 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/go-kit/log"
 	"github.com/stretchr/testify/require"
 
+	"github.com/prometheus/common/promslog"
+
 	"github.com/prometheus/prometheus/model/labels"
-	"github.com/prometheus/prometheus/tsdb/tsdbutil"
+	"github.com/prometheus/prometheus/tsdb/chunks"
 )
 
 func TestBlockWriter(t *testing.T) {
 	ctx := context.Background()
 	outputDir := t.TempDir()
-	w, err := NewBlockWriter(log.NewNopLogger(), outputDir, DefaultBlockDuration)
+	w, err := NewBlockWriter(promslog.NewNopLogger(), outputDir, DefaultBlockDuration)
 	require.NoError(t, err)
 
 	// Add some series.
@@ -46,15 +47,15 @@ func TestBlockWriter(t *testing.T) {
 
 	// Confirm the block has the correct data.
 	blockpath := filepath.Join(outputDir, id.String())
-	b, err := OpenBlock(nil, blockpath, nil)
+	b, err := OpenBlock(nil, blockpath, nil, nil)
 	require.NoError(t, err)
 	defer func() { require.NoError(t, b.Close()) }()
 	q, err := NewBlockQuerier(b, math.MinInt64, math.MaxInt64)
 	require.NoError(t, err)
 	series := query(t, q, labels.MustNewMatcher(labels.MatchRegexp, "", ".*"))
-	sample1 := []tsdbutil.Sample{sample{t: ts1, v: v1}}
-	sample2 := []tsdbutil.Sample{sample{t: ts2, v: v2}}
-	expectedSeries := map[string][]tsdbutil.Sample{"{a=\"b\"}": sample1, "{c=\"d\"}": sample2}
+	sample1 := []chunks.Sample{sample{t: ts1, f: v1}}
+	sample2 := []chunks.Sample{sample{t: ts2, f: v2}}
+	expectedSeries := map[string][]chunks.Sample{"{a=\"b\"}": sample1, "{c=\"d\"}": sample2}
 	require.Equal(t, expectedSeries, series)
 
 	require.NoError(t, w.Close())

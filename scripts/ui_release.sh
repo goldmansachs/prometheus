@@ -30,8 +30,8 @@ function publish() {
     cmd+=" --dry-run"
   fi
   for workspace in ${workspaces}; do
-    # package "app" is private so we shouldn't try to publish it.
-    if [[ "${workspace}" != "react-app" ]]; then
+    # package "mantine-ui" is private so we shouldn't try to publish it.
+    if [[ "${workspace}" != "mantine-ui" ]]; then
       cd "${workspace}"
       eval "${cmd}"
       cd "${root_ui_folder}"
@@ -85,7 +85,7 @@ function bumpVersion() {
     fi
   done
   # increase the version on all packages
-  npm version "${version}" --workspaces
+  npm version "${version}" --workspaces  --include-workspace-root
 }
 
 if [[ "$1" == "--copy" ]]; then

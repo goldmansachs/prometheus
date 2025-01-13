@@ -1,8 +1,8 @@
 <h1 align="center" style="border-bottom: none">
-    <a href="//prometheus.io" target="_blank"><img alt="Prometheus" src="/documentation/images/prometheus-logo.svg"></a><br>Prometheus
+    <a href="https://prometheus.io" target="_blank"><img alt="Prometheus" src="/documentation/images/prometheus-logo.svg"></a><br>Prometheus
 </h1>
 
-<p align="center">Visit <a href="//prometheus.io" target="_blank">prometheus.io</a> for the full documentation,
+<p align="center">Visit <a href="https://prometheus.io" target="_blank">prometheus.io</a> for the full documentation,
 examples and guides.</p>
 
 <div align="center">
@@ -12,6 +12,8 @@ examples and guides.</p>
 [![Docker Pulls](https://img.shields.io/docker/pulls/prom/prometheus.svg?maxAge=604800)][hub]
 [![Go Report Card](https://goreportcard.com/badge/github.com/prometheus/prometheus)](https://goreportcard.com/report/github.com/prometheus/prometheus)
 [![CII Best Practices](https://bestpractices.coreinfrastructure.org/projects/486/badge)](https://bestpractices.coreinfrastructure.org/projects/486)
+[![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/prometheus/prometheus/badge)](https://securityscorecards.dev/viewer/?uri=github.com/prometheus/prometheus)
+[![CLOMonitor](https://img.shields.io/endpoint?url=https://clomonitor.io/api/projects/cncf/prometheus/badge)](https://clomonitor.io/projects/cncf/prometheus)
 [![Gitpod ready-to-code](https://img.shields.io/badge/Gitpod-ready--to--code-blue?logo=gitpod)](https://gitpod.io/#https://github.com/prometheus/prometheus)
 [![Fuzzing Status](https://oss-fuzz-build-logs.storage.googleapis.com/badges/prometheus.svg)](https://bugs.chromium.org/p/oss-fuzz/issues/list?sort=-opened&can=1&q=proj:prometheus)
 
@@ -34,7 +36,7 @@ The features that distinguish Prometheus from other metrics and monitoring syste
 
 ## Architecture overview
 
-![Architecture overview](https://cdn.jsdelivr.net/gh/prometheus/prometheus@c34257d069c630685da35bcef084632ffd5d6209/documentation/images/architecture.svg)
+![Architecture overview](documentation/images/architecture.svg)
 
 ## Install
 
@@ -65,7 +67,7 @@ Prometheus will now be reachable at <http://localhost:9090/>.
 
 To build Prometheus from source code, You need:
 
-* Go [version 1.17 or greater](https://golang.org/doc/install).
+* Go [version 1.22 or greater](https://golang.org/doc/install).
 * NodeJS [version 16 or greater](https://nodejs.org/).
 * npm [version 7 or greater](https://www.npmjs.com/).
 
@@ -113,7 +115,7 @@ The Makefile provides several targets:
 
 Prometheus is bundled with many service discovery plugins.
 When building Prometheus from source, you can edit the [plugins.yml](./plugins.yml)
-file to disable some service discoveries. The file is a yaml-formated list of go
+file to disable some service discoveries. The file is a yaml-formatted list of go
 import path that will be built into the Prometheus binary.
 
 After you have changed the file, you
@@ -148,7 +150,7 @@ We are publishing our Remote Write protobuf independently at
 You can use that as a library:
 
 ```shell
-go get go.buf.build/protocolbuffers/go/prometheus/prometheus
+go get buf.build/gen/go/prometheus/prometheus/protocolbuffers/go@latest
 ```
 
 This is experimental.
@@ -156,8 +158,19 @@ This is experimental.
 ### Prometheus code base
 
 In order to comply with [go mod](https://go.dev/ref/mod#versions) rules,
-Prometheus release number do not exactly match Go module releases. For the
-Prometheus v2.y.z releases, we are publishing equivalent v0.y.z tags.
+Prometheus release number do not exactly match Go module releases.
+
+For the
+Prometheus v3.y.z releases, we are publishing equivalent v0.3y.z tags. The y in v0.3y.z is always padded to two digits, with a leading zero if needed.
+
+Therefore, a user that would want to use Prometheus v3.0.0 as a library could do:
+
+```shell
+go get github.com/prometheus/prometheus@v0.300.0
+```
+
+For the
+Prometheus v2.y.z releases, we published the equivalent v0.y.z tags.
 
 Therefore, a user that would want to use Prometheus v2.35.0 as a library could do:
 
@@ -175,7 +188,7 @@ For more information on building, running, and developing on the React-based UI,
 
 ## More information
 
-* Godoc documentation is available via [pkg.go.dev](https://pkg.go.dev/github.com/prometheus/prometheus). Due to peculiarities of Go Modules, v2.x.y will be displayed as v0.x.y.
+* Godoc documentation is available via [pkg.go.dev](https://pkg.go.dev/github.com/prometheus/prometheus). Due to peculiarities of Go Modules, v3.y.z will be displayed as v0.3y.z (the y in v0.3y.z is always padded to two digits, with a leading zero if needed), while v2.y.z will be displayed as v0.y.z.
 * See the [Community page](https://prometheus.io/community) for how to reach the Prometheus developers and users on various communication channels.
 
 ## Contributing

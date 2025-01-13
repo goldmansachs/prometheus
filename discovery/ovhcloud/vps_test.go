@@ -23,8 +23,8 @@ import (
 
 	yaml "gopkg.in/yaml.v2"
 
-	"github.com/go-kit/log"
 	"github.com/prometheus/common/model"
+	"github.com/prometheus/common/promslog"
 	"github.com/stretchr/testify/require"
 )
 
@@ -43,17 +43,17 @@ consumer_key: %s`, mock.URL, ovhcloudApplicationKeyTest, ovhcloudApplicationSecr
 
 	require.NoError(t, yaml.UnmarshalStrict([]byte(cfgString), &cfg))
 
-	d, err := newRefresher(&cfg, log.NewNopLogger())
+	d, err := newRefresher(&cfg, promslog.NewNopLogger())
 	require.NoError(t, err)
 	ctx := context.Background()
 	targetGroups, err := d.refresh(ctx)
 	require.NoError(t, err)
 
-	require.Equal(t, 1, len(targetGroups))
+	require.Len(t, targetGroups, 1)
 	targetGroup := targetGroups[0]
 	require.NotNil(t, targetGroup)
 	require.NotNil(t, targetGroup.Targets)
-	require.Equal(t, 1, len(targetGroup.Targets))
+	require.Len(t, targetGroup.Targets, 1)
 	for i, lbls := range []model.LabelSet{
 		{
 			"__address__":                               "192.0.2.1",
@@ -91,7 +91,7 @@ func MockVpsAPI(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if string(r.URL.Path) == "/vps" {
+	if r.URL.Path == "/vps" {
 		dedicatedServersList, err := os.ReadFile("testdata/vps/vps.json")
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -103,7 +103,7 @@ func MockVpsAPI(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	if string(r.URL.Path) == "/vps/abc" {
+	if r.URL.Path == "/vps/abc" {
 		dedicatedServer, err := os.ReadFile("testdata/vps/vps_details.json")
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -115,7 +115,7 @@ func MockVpsAPI(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	if string(r.URL.Path) == "/vps/abc/ips" {
+	if r.URL.Path == "/vps/abc/ips" {
 		dedicatedServerIPs, err := os.ReadFile("testdata/vps/vps_abc_ips.json")
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)

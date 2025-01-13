@@ -17,22 +17,22 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"math"
 	"os"
 	"strings"
 
-	"github.com/go-kit/log"
-	"github.com/go-kit/log/level"
 	influx "github.com/influxdata/influxdb/client/v2"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/common/model"
+	"github.com/prometheus/common/promslog"
 
 	"github.com/prometheus/prometheus/prompb"
 )
 
 // Client allows sending batches of Prometheus samples to InfluxDB.
 type Client struct {
-	logger log.Logger
+	logger *slog.Logger
 
 	client          influx.Client
 	database        string
@@ -41,16 +41,16 @@ type Client struct {
 }
 
 // NewClient creates a new Client.
-func NewClient(logger log.Logger, conf influx.HTTPConfig, db, rp string) *Client {
+func NewClient(logger *slog.Logger, conf influx.HTTPConfig, db, rp string) *Client {
 	c, err := influx.NewHTTPClient(conf)
 	// Currently influx.NewClient() *should* never return an error.
 	if err != nil {
-		level.Error(logger).Log("err", err)
+		logger.Error("Error creating influx HTTP client", "err", err)
 		os.Exit(1)
 	}
 
 	if logger == nil {
-		logger = log.NewNopLogger()
+		logger = promslog.NewNopLogger()
 	}
 
 	return &Client{
@@ -84,7 +84,7 @@ func (c *Client) Write(samples model.Samples) error {
 	for _, s := range samples {
 		v := float64(s.Value)
 		if math.IsNaN(v) || math.IsInf(v, 0) {
-			level.Debug(c.logger).Log("msg", "Cannot send  to InfluxDB, skipping sample", "value", v, "sample", s)
+			c.logger.Debug("Cannot send  to InfluxDB, skipping sample", "value", v, "sample", s)
 			c.ignoredSamples.Inc()
 			continue
 		}
@@ -184,11 +184,11 @@ func (c *Client) buildCommand(q *prompb.Query) (string, error) {
 }
 
 func escapeSingleQuotes(str string) string {
-	return strings.Replace(str, `'`, `\'`, -1)
+	return strings.ReplaceAll(str, `'`, `\'`)
 }
 
 func escapeSlashes(str string) string {
-	return strings.Replace(str, `/`, `\/`, -1)
+	return strings.ReplaceAll(str, `/`, `\/`)
 }
 
 func mergeResult(labelsToSeries map[string]*prompb.TimeSeries, results []influx.Result) error {
@@ -290,13 +290,14 @@ func mergeSamples(a, b []prompb.Sample) []prompb.Sample {
 	result := make([]prompb.Sample, 0, len(a)+len(b))
 	i, j := 0, 0
 	for i < len(a) && j < len(b) {
-		if a[i].Timestamp < b[j].Timestamp {
+		switch {
+		case a[i].Timestamp < b[j].Timestamp:
 			result = append(result, a[i])
 			i++
-		} else if a[i].Timestamp > b[j].Timestamp {
+		case a[i].Timestamp > b[j].Timestamp:
 			result = append(result, b[j])
 			j++
-		} else {
+		default:
 			result = append(result, a[i])
 			i++
 			j++

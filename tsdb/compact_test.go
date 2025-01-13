@@ -15,20 +15,22 @@ package tsdb
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"math/rand"
 	"os"
 	"path"
 	"path/filepath"
+	"runtime"
+	"strconv"
 	"sync"
 	"testing"
 	"time"
 
-	"github.com/go-kit/log"
 	"github.com/oklog/ulid"
-	"github.com/pkg/errors"
 	prom_testutil "github.com/prometheus/client_golang/prometheus/testutil"
+	"github.com/prometheus/common/promslog"
 	"github.com/stretchr/testify/require"
 
 	"github.com/prometheus/prometheus/model/histogram"
@@ -37,8 +39,10 @@ import (
 	"github.com/prometheus/prometheus/tsdb/chunkenc"
 	"github.com/prometheus/prometheus/tsdb/chunks"
 	"github.com/prometheus/prometheus/tsdb/fileutil"
+	"github.com/prometheus/prometheus/tsdb/index"
 	"github.com/prometheus/prometheus/tsdb/tombstones"
 	"github.com/prometheus/prometheus/tsdb/tsdbutil"
+	"github.com/prometheus/prometheus/tsdb/wlog"
 )
 
 func TestSplitByRange(t *testing.T) {
@@ -430,7 +434,7 @@ func TestRangeWithFailedCompactionWontGetSelected(t *testing.T) {
 }
 
 func TestCompactionFailWillCleanUpTempDir(t *testing.T) {
-	compactor, err := NewLeveledCompactor(context.Background(), nil, log.NewNopLogger(), []int64{
+	compactor, err := NewLeveledCompactor(context.Background(), nil, promslog.NewNopLogger(), []int64{
 		20,
 		60,
 		240,
@@ -441,7 +445,7 @@ func TestCompactionFailWillCleanUpTempDir(t *testing.T) {
 
 	tmpdir := t.TempDir()
 
-	require.Error(t, compactor.write(tmpdir, &BlockMeta{}, erringBReader{}))
+	require.Error(t, compactor.write(tmpdir, &BlockMeta{}, DefaultBlockPopulator{}, erringBReader{}))
 	_, err = os.Stat(filepath.Join(tmpdir, BlockMeta{}.ULID.String()) + tmpForCreationBlockDirSuffix)
 	require.True(t, os.IsNotExist(err), "directory is not cleaned up")
 }
@@ -467,8 +471,8 @@ func (erringBReader) Size() int64                            { return 0 }
 
 type nopChunkWriter struct{}
 
-func (nopChunkWriter) WriteChunks(chunks ...chunks.Meta) error { return nil }
-func (nopChunkWriter) Close() error                            { return nil }
+func (nopChunkWriter) WriteChunks(...chunks.Meta) error { return nil }
+func (nopChunkWriter) Close() error                     { return nil }
 
 func samplesForRange(minTime, maxTime int64, maxSamplesPerChunk int) (ret [][]sample) {
 	var curr []sample
@@ -491,6 +495,7 @@ func TestCompaction_populateBlock(t *testing.T) {
 		inputSeriesSamples [][]seriesSamples
 		compactMinTime     int64
 		compactMaxTime     int64 // When not defined the test runner sets a default of math.MaxInt64.
+		irPostingsFunc     IndexReaderPostingsFunc
 		expSeriesSamples   []seriesSamples
 		expErr             error
 	}{
@@ -933,6 +938,86 @@ func TestCompaction_populateBlock(t *testing.T) {
 				},
 			},
 		},
+		{
+			// Regression test for populateWithDelChunkSeriesIterator failing to set minTime on chunks.
+			title:          "Populate from mixed type series and expect sample inside the interval only.",
+			compactMinTime: 1,
+			compactMaxTime: 11,
+			inputSeriesSamples: [][]seriesSamples{
+				{
+					{
+						lset: map[string]string{"a": "1"},
+						chunks: [][]sample{
+							{{t: 0, h: tsdbutil.GenerateTestHistogram(0)}, {t: 1, h: tsdbutil.GenerateTestHistogram(1)}},
+							{{t: 10, f: 1}, {t: 11, f: 2}},
+						},
+					},
+				},
+			},
+			expSeriesSamples: []seriesSamples{
+				{
+					lset: map[string]string{"a": "1"},
+					chunks: [][]sample{
+						{{t: 1, h: tsdbutil.GenerateTestHistogram(1)}},
+						{{t: 10, f: 1}},
+					},
+				},
+			},
+		},
+		{
+			title: "Populate from single block with index reader postings function selecting different series. Expect empty block.",
+			inputSeriesSamples: [][]seriesSamples{
+				{
+					{
+						lset:   map[string]string{"a": "b"},
+						chunks: [][]sample{{{t: 0}, {t: 10}}, {{t: 11}, {t: 20}}},
+					},
+				},
+			},
+			irPostingsFunc: func(ctx context.Context, reader IndexReader) index.Postings {
+				p, err := reader.Postings(ctx, "a", "c")
+				if err != nil {
+					return index.EmptyPostings()
+				}
+				return reader.SortedPostings(p)
+			},
+		},
+		{
+			title: "Populate from single block with index reader postings function selecting one series. Expect partial block.",
+			inputSeriesSamples: [][]seriesSamples{
+				{
+					{
+						lset:   map[string]string{"a": "b"},
+						chunks: [][]sample{{{t: 0}, {t: 10}}, {{t: 11}, {t: 20}}},
+					},
+					{
+						lset:   map[string]string{"a": "c"},
+						chunks: [][]sample{{{t: 0}, {t: 10}}, {{t: 11}, {t: 20}}},
+					},
+					{
+						lset:   map[string]string{"a": "d"},
+						chunks: [][]sample{{{t: 0}, {t: 10}}, {{t: 11}, {t: 20}}},
+					},
+				},
+			},
+			irPostingsFunc: func(ctx context.Context, reader IndexReader) index.Postings {
+				p, err := reader.Postings(ctx, "a", "c", "d")
+				if err != nil {
+					return index.EmptyPostings()
+				}
+				return reader.SortedPostings(p)
+			},
+			expSeriesSamples: []seriesSamples{
+				{
+					lset:   map[string]string{"a": "c"},
+					chunks: [][]sample{{{t: 0}, {t: 10}}, {{t: 11}, {t: 20}}},
+				},
+				{
+					lset:   map[string]string{"a": "d"},
+					chunks: [][]sample{{{t: 0}, {t: 10}}, {{t: 11}, {t: 20}}},
+				},
+			},
+		},
 	} {
 		t.Run(tc.title, func(t *testing.T) {
 			blocks := make([]BlockReader, 0, len(tc.inputSeriesSamples))
@@ -953,10 +1038,14 @@ func TestCompaction_populateBlock(t *testing.T) {
 			}
 
 			iw := &mockIndexWriter{}
-			err = c.populateBlock(blocks, meta, iw, nopChunkWriter{})
+			blockPopulator := DefaultBlockPopulator{}
+			irPostingsFunc := AllSortedPostings
+			if tc.irPostingsFunc != nil {
+				irPostingsFunc = tc.irPostingsFunc
+			}
+			err = blockPopulator.PopulateBlock(c.ctx, c.metrics, c.logger, c.chunkPool, c.mergeFunc, blocks, meta, iw, nopChunkWriter{}, irPostingsFunc)
 			if tc.expErr != nil {
-				require.Error(t, err)
-				require.Equal(t, tc.expErr.Error(), err.Error())
+				require.EqualError(t, err, tc.expErr.Error())
 				return
 			}
 			require.NoError(t, err)
@@ -973,12 +1062,23 @@ func TestCompaction_populateBlock(t *testing.T) {
 						firstTs int64 = math.MaxInt64
 						s       sample
 					)
-					for iter.Next() == chunkenc.ValFloat {
-						s.t, s.v = iter.At()
+					for vt := iter.Next(); vt != chunkenc.ValNone; vt = iter.Next() {
+						switch vt {
+						case chunkenc.ValFloat:
+							s.t, s.f = iter.At()
+							samples = append(samples, s)
+						case chunkenc.ValHistogram:
+							s.t, s.h = iter.AtHistogram(nil)
+							samples = append(samples, s)
+						case chunkenc.ValFloatHistogram:
+							s.t, s.fh = iter.AtFloatHistogram(nil)
+							samples = append(samples, s)
+						default:
+							require.Fail(t, "unexpected value type")
+						}
 						if firstTs == math.MaxInt64 {
 							firstTs = s.t
 						}
-						samples = append(samples, s)
 					}
 
 					// Check if chunk has correct min, max times.
@@ -1053,7 +1153,7 @@ func BenchmarkCompaction(b *testing.B) {
 			blockDirs := make([]string, 0, len(c.ranges))
 			var blocks []*Block
 			for _, r := range c.ranges {
-				block, err := OpenBlock(nil, createBlock(b, dir, genSeries(nSeries, 10, r[0], r[1])), nil)
+				block, err := OpenBlock(nil, createBlock(b, dir, genSeries(nSeries, 10, r[0], r[1])), nil, nil)
 				require.NoError(b, err)
 				blocks = append(blocks, block)
 				defer func() {
@@ -1062,7 +1162,7 @@ func BenchmarkCompaction(b *testing.B) {
 				blockDirs = append(blockDirs, block.Dir())
 			}
 
-			c, err := NewLeveledCompactor(context.Background(), nil, log.NewNopLogger(), []int64{0}, nil, nil)
+			c, err := NewLeveledCompactor(context.Background(), nil, promslog.NewNopLogger(), []int64{0}, nil, nil)
 			require.NoError(b, err)
 
 			b.ResetTimer()
@@ -1090,7 +1190,7 @@ func BenchmarkCompactionFromHead(b *testing.B) {
 			for ln := 0; ln < labelNames; ln++ {
 				app := h.Appender(context.Background())
 				for lv := 0; lv < labelValues; lv++ {
-					app.Append(0, labels.FromStrings(fmt.Sprintf("%d", ln), fmt.Sprintf("%d%s%d", lv, postingsBenchSuffix, ln)), 0, 0)
+					app.Append(0, labels.FromStrings(strconv.Itoa(ln), fmt.Sprintf("%d%s%d", lv, postingsBenchSuffix, ln)), 0, 0)
 				}
 				require.NoError(b, app.Commit())
 			}
@@ -1099,6 +1199,46 @@ func BenchmarkCompactionFromHead(b *testing.B) {
 			b.ReportAllocs()
 			for i := 0; i < b.N; i++ {
 				createBlockFromHead(b, filepath.Join(dir, fmt.Sprintf("%d-%d", i, labelNames)), h)
+			}
+			h.Close()
+		})
+	}
+}
+
+func BenchmarkCompactionFromOOOHead(b *testing.B) {
+	dir := b.TempDir()
+	totalSeries := 100000
+	totalSamples := 100
+	for labelNames := 1; labelNames < totalSeries; labelNames *= 10 {
+		labelValues := totalSeries / labelNames
+		b.Run(fmt.Sprintf("labelnames=%d,labelvalues=%d", labelNames, labelValues), func(b *testing.B) {
+			chunkDir := b.TempDir()
+			opts := DefaultHeadOptions()
+			opts.ChunkRange = 1000
+			opts.ChunkDirRoot = chunkDir
+			opts.OutOfOrderTimeWindow.Store(int64(totalSamples))
+			h, err := NewHead(nil, nil, nil, nil, opts, nil)
+			require.NoError(b, err)
+			for ln := 0; ln < labelNames; ln++ {
+				app := h.Appender(context.Background())
+				for lv := 0; lv < labelValues; lv++ {
+					lbls := labels.FromStrings(strconv.Itoa(ln), fmt.Sprintf("%d%s%d", lv, postingsBenchSuffix, ln))
+					_, err = app.Append(0, lbls, int64(totalSamples), 0)
+					require.NoError(b, err)
+					for ts := 0; ts < totalSamples; ts++ {
+						_, err = app.Append(0, lbls, int64(ts), float64(ts))
+						require.NoError(b, err)
+					}
+				}
+				require.NoError(b, app.Commit())
+			}
+
+			b.ResetTimer()
+			b.ReportAllocs()
+			for i := 0; i < b.N; i++ {
+				oooHead, err := NewOOOCompactionHead(context.TODO(), h)
+				require.NoError(b, err)
+				createBlockFromOOOHead(b, filepath.Join(dir, fmt.Sprintf("%d-%d", i, labelNames)), oooHead)
 			}
 			h.Close()
 		})
@@ -1143,7 +1283,7 @@ func TestDisableAutoCompactions(t *testing.T) {
 	}
 
 	require.Greater(t, prom_testutil.ToFloat64(db.metrics.compactionsSkipped), 0.0, "No compaction was skipped after the set timeout.")
-	require.Equal(t, 0, len(db.blocks))
+	require.Empty(t, db.blocks)
 
 	// Enable the compaction, trigger it and check that the block is persisted.
 	db.EnableCompactions()
@@ -1157,7 +1297,7 @@ func TestDisableAutoCompactions(t *testing.T) {
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
-	require.Greater(t, len(db.Blocks()), 0, "No block was persisted after the set timeout.")
+	require.NotEmpty(t, db.Blocks(), "No block was persisted after the set timeout.")
 }
 
 // TestCancelCompactions ensures that when the db is closed
@@ -1171,28 +1311,24 @@ func TestCancelCompactions(t *testing.T) {
 	createBlock(t, tmpdir, genSeries(1, 1, 2000, 2001)) // The most recent block is ignored so can be e small one.
 
 	// Copy the db so we have an exact copy to compare compaction times.
-	tmpdirCopy := tmpdir + "Copy"
+	tmpdirCopy := t.TempDir()
 	err := fileutil.CopyDirs(tmpdir, tmpdirCopy)
 	require.NoError(t, err)
-	defer func() {
-		require.NoError(t, os.RemoveAll(tmpdirCopy))
-	}()
 
 	// Measure the compaction time without interrupting it.
 	var timeCompactionUninterrupted time.Duration
 	{
-		db, err := open(tmpdir, log.NewNopLogger(), nil, DefaultOptions(), []int64{1, 2000}, nil)
+		db, err := open(tmpdir, promslog.NewNopLogger(), nil, DefaultOptions(), []int64{1, 2000}, nil)
 		require.NoError(t, err)
-		require.Equal(t, 3, len(db.Blocks()), "initial block count mismatch")
-		require.Equal(t, 0.0, prom_testutil.ToFloat64(db.compactor.(*LeveledCompactor).metrics.ran), "initial compaction counter mismatch")
+		require.Len(t, db.Blocks(), 3, "initial block count mismatch")
+		require.Equal(t, 0.0, prom_testutil.ToFloat64(db.compactor.(*LeveledCompactor).metrics.Ran), "initial compaction counter mismatch")
 		db.compactc <- struct{}{} // Trigger a compaction.
-		var start time.Time
-		for prom_testutil.ToFloat64(db.compactor.(*LeveledCompactor).metrics.populatingBlocks) <= 0 {
+		for prom_testutil.ToFloat64(db.compactor.(*LeveledCompactor).metrics.PopulatingBlocks) <= 0 {
 			time.Sleep(3 * time.Millisecond)
 		}
-		start = time.Now()
 
-		for prom_testutil.ToFloat64(db.compactor.(*LeveledCompactor).metrics.ran) != 1 {
+		start := time.Now()
+		for prom_testutil.ToFloat64(db.compactor.(*LeveledCompactor).metrics.Ran) != 1 {
 			time.Sleep(3 * time.Millisecond)
 		}
 		timeCompactionUninterrupted = time.Since(start)
@@ -1201,31 +1337,40 @@ func TestCancelCompactions(t *testing.T) {
 	}
 	// Measure the compaction time when closing the db in the middle of compaction.
 	{
-		db, err := open(tmpdirCopy, log.NewNopLogger(), nil, DefaultOptions(), []int64{1, 2000}, nil)
+		db, err := open(tmpdirCopy, promslog.NewNopLogger(), nil, DefaultOptions(), []int64{1, 2000}, nil)
 		require.NoError(t, err)
-		require.Equal(t, 3, len(db.Blocks()), "initial block count mismatch")
-		require.Equal(t, 0.0, prom_testutil.ToFloat64(db.compactor.(*LeveledCompactor).metrics.ran), "initial compaction counter mismatch")
+		require.Len(t, db.Blocks(), 3, "initial block count mismatch")
+		require.Equal(t, 0.0, prom_testutil.ToFloat64(db.compactor.(*LeveledCompactor).metrics.Ran), "initial compaction counter mismatch")
 		db.compactc <- struct{}{} // Trigger a compaction.
-		dbClosed := make(chan struct{})
 
-		for prom_testutil.ToFloat64(db.compactor.(*LeveledCompactor).metrics.populatingBlocks) <= 0 {
+		for prom_testutil.ToFloat64(db.compactor.(*LeveledCompactor).metrics.PopulatingBlocks) <= 0 {
 			time.Sleep(3 * time.Millisecond)
 		}
-		go func() {
-			require.NoError(t, db.Close())
-			close(dbClosed)
-		}()
 
 		start := time.Now()
-		<-dbClosed
+		require.NoError(t, db.Close())
 		actT := time.Since(start)
-		expT := time.Duration(timeCompactionUninterrupted / 2) // Closing the db in the middle of compaction should less than half the time.
-		require.True(t, actT < expT, "closing the db took more than expected. exp: <%v, act: %v", expT, actT)
+
+		expT := timeCompactionUninterrupted / 2 // Closing the db in the middle of compaction should less than half the time.
+		require.Less(t, actT, expT, "closing the db took more than expected. exp: <%v, act: %v", expT, actT)
+
+		// Make sure that no blocks were marked as compaction failed.
+		// This checks that the `context.Canceled` error is properly checked at all levels:
+		// - tsdb_errors.NewMulti() should have the Is() method implemented for correct checks.
+		// - callers should check with errors.Is() instead of ==.
+		readOnlyDB, err := OpenDBReadOnly(tmpdirCopy, "", promslog.NewNopLogger())
+		require.NoError(t, err)
+		blocks, err := readOnlyDB.Blocks()
+		require.NoError(t, err)
+		for i, b := range blocks {
+			require.Falsef(t, b.Meta().Compaction.Failed, "block %d (%s) should not be marked as compaction failed", i, b.Meta().ULID)
+		}
+		require.NoError(t, readOnlyDB.Close())
 	}
 }
 
 // TestDeleteCompactionBlockAfterFailedReload ensures that a failed reloadBlocks immediately after a compaction
-// deletes the resulting block to avoid creatings blocks with the same time range.
+// deletes the resulting block to avoid creating blocks with the same time range.
 func TestDeleteCompactionBlockAfterFailedReload(t *testing.T) {
 	tests := map[string]func(*DB) int{
 		"Test Head Compaction": func(db *DB) int {
@@ -1262,6 +1407,8 @@ func TestDeleteCompactionBlockAfterFailedReload(t *testing.T) {
 
 	for title, bootStrap := range tests {
 		t.Run(title, func(t *testing.T) {
+			ctx := context.Background()
+
 			db := openTestDB(t, nil, []int64{1, 100})
 			defer func() {
 				require.NoError(t, db.Close())
@@ -1279,15 +1426,15 @@ func TestDeleteCompactionBlockAfterFailedReload(t *testing.T) {
 			require.NoError(t, os.RemoveAll(lastBlockIndex)) // Corrupt the block by removing the index file.
 
 			require.Equal(t, 0.0, prom_testutil.ToFloat64(db.metrics.reloadsFailed), "initial 'failed db reloadBlocks' count metrics mismatch")
-			require.Equal(t, 0.0, prom_testutil.ToFloat64(db.compactor.(*LeveledCompactor).metrics.ran), "initial `compactions` count metric mismatch")
+			require.Equal(t, 0.0, prom_testutil.ToFloat64(db.compactor.(*LeveledCompactor).metrics.Ran), "initial `compactions` count metric mismatch")
 			require.Equal(t, 0.0, prom_testutil.ToFloat64(db.metrics.compactionsFailed), "initial `compactions failed` count metric mismatch")
 
 			// Do the compaction and check the metrics.
 			// Compaction should succeed, but the reloadBlocks should fail and
 			// the new block created from the compaction should be deleted.
-			require.Error(t, db.Compact())
+			require.Error(t, db.Compact(ctx))
 			require.Equal(t, 1.0, prom_testutil.ToFloat64(db.metrics.reloadsFailed), "'failed db reloadBlocks' count metrics mismatch")
-			require.Equal(t, 1.0, prom_testutil.ToFloat64(db.compactor.(*LeveledCompactor).metrics.ran), "`compaction` count metric mismatch")
+			require.Equal(t, 1.0, prom_testutil.ToFloat64(db.compactor.(*LeveledCompactor).metrics.Ran), "`compaction` count metric mismatch")
 			require.Equal(t, 1.0, prom_testutil.ToFloat64(db.metrics.compactionsFailed), "`compactions failed` count metric mismatch")
 
 			actBlocks, err = blockDirs(db.Dir())
@@ -1300,7 +1447,7 @@ func TestDeleteCompactionBlockAfterFailedReload(t *testing.T) {
 func TestHeadCompactionWithHistograms(t *testing.T) {
 	for _, floatTest := range []bool{true, false} {
 		t.Run(fmt.Sprintf("float=%t", floatTest), func(t *testing.T) {
-			head, _ := newTestHead(t, DefaultBlockDuration, false, false)
+			head, _ := newTestHead(t, DefaultBlockDuration, wlog.CompressionNone, false)
 			require.NoError(t, head.Init(0))
 			t.Cleanup(func() {
 				require.NoError(t, head.Close())
@@ -1309,15 +1456,15 @@ func TestHeadCompactionWithHistograms(t *testing.T) {
 			minute := func(m int) int64 { return int64(m) * time.Minute.Milliseconds() }
 			ctx := context.Background()
 			appendHistogram := func(
-				lbls labels.Labels, from, to int, h *histogram.Histogram, exp *[]tsdbutil.Sample,
+				lbls labels.Labels, from, to int, h *histogram.Histogram, exp *[]chunks.Sample,
 			) {
 				t.Helper()
 				app := head.Appender(ctx)
 				for tsMinute := from; tsMinute <= to; tsMinute++ {
 					var err error
 					if floatTest {
-						_, err = app.AppendHistogram(0, lbls, minute(tsMinute), nil, h.ToFloat())
-						efh := h.ToFloat()
+						_, err = app.AppendHistogram(0, lbls, minute(tsMinute), nil, h.ToFloat(nil))
+						efh := h.ToFloat(nil)
 						if tsMinute == from {
 							efh.CounterResetHint = histogram.UnknownCounterReset
 						} else {
@@ -1338,13 +1485,13 @@ func TestHeadCompactionWithHistograms(t *testing.T) {
 				}
 				require.NoError(t, app.Commit())
 			}
-			appendFloat := func(lbls labels.Labels, from, to int, exp *[]tsdbutil.Sample) {
+			appendFloat := func(lbls labels.Labels, from, to int, exp *[]chunks.Sample) {
 				t.Helper()
 				app := head.Appender(ctx)
 				for tsMinute := from; tsMinute <= to; tsMinute++ {
 					_, err := app.Append(0, lbls, minute(tsMinute), float64(tsMinute))
 					require.NoError(t, err)
-					*exp = append(*exp, sample{t: minute(tsMinute), v: float64(tsMinute)})
+					*exp = append(*exp, sample{t: minute(tsMinute), f: float64(tsMinute)})
 				}
 				require.NoError(t, app.Commit())
 			}
@@ -1354,10 +1501,10 @@ func TestHeadCompactionWithHistograms(t *testing.T) {
 				series2                = labels.FromStrings("foo", "bar2")
 				series3                = labels.FromStrings("foo", "bar3")
 				series4                = labels.FromStrings("foo", "bar4")
-				exp1, exp2, exp3, exp4 []tsdbutil.Sample
+				exp1, exp2, exp3, exp4 []chunks.Sample
 			)
 			h := &histogram.Histogram{
-				Count:         11,
+				Count:         15,
 				ZeroCount:     4,
 				ZeroThreshold: 0.001,
 				Sum:           35.5,
@@ -1397,12 +1544,12 @@ func TestHeadCompactionWithHistograms(t *testing.T) {
 			maxt := head.MaxTime() + 1 // Block intervals are half-open: [b.MinTime, b.MaxTime).
 			compactor, err := NewLeveledCompactor(context.Background(), nil, nil, []int64{DefaultBlockDuration}, chunkenc.NewPool(), nil)
 			require.NoError(t, err)
-			id, err := compactor.Write(head.opts.ChunkDirRoot, head, mint, maxt, nil)
+			ids, err := compactor.Write(head.opts.ChunkDirRoot, head, mint, maxt, nil)
 			require.NoError(t, err)
-			require.NotEqual(t, ulid.ULID{}, id)
+			require.Len(t, ids, 1)
 
 			// Open the block and query it and check the histograms.
-			block, err := OpenBlock(nil, path.Join(head.opts.ChunkDirRoot, id.String()), nil)
+			block, err := OpenBlock(nil, path.Join(head.opts.ChunkDirRoot, ids[0].String()), nil, nil)
 			require.NoError(t, err)
 			t.Cleanup(func() {
 				require.NoError(t, block.Close())
@@ -1412,7 +1559,7 @@ func TestHeadCompactionWithHistograms(t *testing.T) {
 			require.NoError(t, err)
 
 			actHists := query(t, q, labels.MustNewMatcher(labels.MatchRegexp, "foo", "bar.*"))
-			require.Equal(t, map[string][]tsdbutil.Sample{
+			require.Equal(t, map[string][]chunks.Sample{
 				series1.String(): exp1,
 				series2.String(): exp2,
 				series3.String(): exp3,
@@ -1446,12 +1593,6 @@ func TestSparseHistogramSpaceSavings(t *testing.T) {
 		{100, 15, 3, 5},
 		{100, 50, 3, 3},
 		{100, 100, 3, 2},
-		//{1000, 15, 1, 0},
-		//{1000, 50, 1, 0},
-		//{1000, 100, 1, 0},
-		//{1000, 15, 3, 5},
-		//{1000, 50, 3, 3},
-		//{1000, 100, 3, 2},
 	}
 
 	type testSummary struct {
@@ -1485,11 +1626,11 @@ func TestSparseHistogramSpaceSavings(t *testing.T) {
 				c.numBuckets,
 			),
 			func(t *testing.T) {
-				oldHead, _ := newTestHead(t, DefaultBlockDuration, false, false)
+				oldHead, _ := newTestHead(t, DefaultBlockDuration, wlog.CompressionNone, false)
 				t.Cleanup(func() {
 					require.NoError(t, oldHead.Close())
 				})
-				sparseHead, _ := newTestHead(t, DefaultBlockDuration, false, false)
+				sparseHead, _ := newTestHead(t, DefaultBlockDuration, wlog.CompressionNone, false)
 				t.Cleanup(func() {
 					require.NoError(t, sparseHead.Close())
 				})
@@ -1517,8 +1658,8 @@ func TestSparseHistogramSpaceSavings(t *testing.T) {
 				sparseApp := sparseHead.Appender(context.Background())
 				numOldSeriesPerHistogram := 0
 
-				var oldULID ulid.ULID
-				var sparseULID ulid.ULID
+				var oldULIDs []ulid.ULID
+				var sparseULIDs []ulid.ULID
 
 				var wg sync.WaitGroup
 
@@ -1545,9 +1686,9 @@ func TestSparseHistogramSpaceSavings(t *testing.T) {
 					maxt := sparseHead.MaxTime() + 1 // Block intervals are half-open: [b.MinTime, b.MaxTime).
 					compactor, err := NewLeveledCompactor(context.Background(), nil, nil, []int64{DefaultBlockDuration}, chunkenc.NewPool(), nil)
 					require.NoError(t, err)
-					sparseULID, err = compactor.Write(sparseHead.opts.ChunkDirRoot, sparseHead, mint, maxt, nil)
+					sparseULIDs, err = compactor.Write(sparseHead.opts.ChunkDirRoot, sparseHead, mint, maxt, nil)
 					require.NoError(t, err)
-					require.NotEqual(t, ulid.ULID{}, sparseULID)
+					require.Len(t, sparseULIDs, 1)
 				}()
 
 				wg.Add(1)
@@ -1569,20 +1710,20 @@ func TestSparseHistogramSpaceSavings(t *testing.T) {
 							for it.Next() {
 								numOldSeriesPerHistogram++
 								b := it.At()
-								lbls := labels.NewBuilder(ah.baseLabels).Set("le", fmt.Sprintf("%.16f", b.Upper)).Labels(labels.EmptyLabels())
+								lbls := labels.NewBuilder(ah.baseLabels).Set("le", fmt.Sprintf("%.16f", b.Upper)).Labels()
 								refs[itIdx], err = oldApp.Append(refs[itIdx], lbls, ts, float64(b.Count))
 								require.NoError(t, err)
 								itIdx++
 							}
 							baseName := ah.baseLabels.Get(labels.MetricName)
 							// _count metric.
-							countLbls := labels.NewBuilder(ah.baseLabels).Set(labels.MetricName, baseName+"_count").Labels(labels.EmptyLabels())
+							countLbls := labels.NewBuilder(ah.baseLabels).Set(labels.MetricName, baseName+"_count").Labels()
 							_, err = oldApp.Append(0, countLbls, ts, float64(h.Count))
 							require.NoError(t, err)
 							numOldSeriesPerHistogram++
 
 							// _sum metric.
-							sumLbls := labels.NewBuilder(ah.baseLabels).Set(labels.MetricName, baseName+"_sum").Labels(labels.EmptyLabels())
+							sumLbls := labels.NewBuilder(ah.baseLabels).Set(labels.MetricName, baseName+"_sum").Labels()
 							_, err = oldApp.Append(0, sumLbls, ts, h.Sum)
 							require.NoError(t, err)
 							numOldSeriesPerHistogram++
@@ -1596,15 +1737,15 @@ func TestSparseHistogramSpaceSavings(t *testing.T) {
 					maxt := oldHead.MaxTime() + 1 // Block intervals are half-open: [b.MinTime, b.MaxTime).
 					compactor, err := NewLeveledCompactor(context.Background(), nil, nil, []int64{DefaultBlockDuration}, chunkenc.NewPool(), nil)
 					require.NoError(t, err)
-					oldULID, err = compactor.Write(oldHead.opts.ChunkDirRoot, oldHead, mint, maxt, nil)
+					oldULIDs, err = compactor.Write(oldHead.opts.ChunkDirRoot, oldHead, mint, maxt, nil)
 					require.NoError(t, err)
-					require.NotEqual(t, ulid.ULID{}, oldULID)
+					require.Len(t, oldULIDs, 1)
 				}()
 
 				wg.Wait()
 
-				oldBlockDir := filepath.Join(oldHead.opts.ChunkDirRoot, oldULID.String())
-				sparseBlockDir := filepath.Join(sparseHead.opts.ChunkDirRoot, sparseULID.String())
+				oldBlockDir := filepath.Join(oldHead.opts.ChunkDirRoot, oldULIDs[0].String())
+				sparseBlockDir := filepath.Join(sparseHead.opts.ChunkDirRoot, sparseULIDs[0].String())
 
 				oldSize, err := fileutil.DirSize(oldBlockDir)
 				require.NoError(t, err)
@@ -1764,4 +1905,249 @@ func TestCompactBlockMetas(t *testing.T) {
 		},
 	}
 	require.Equal(t, expected, output)
+}
+
+func TestCompactEmptyResultBlockWithTombstone(t *testing.T) {
+	ctx := context.Background()
+	tmpdir := t.TempDir()
+	blockDir := createBlock(t, tmpdir, genSeries(1, 1, 0, 10))
+	block, err := OpenBlock(nil, blockDir, nil, nil)
+	require.NoError(t, err)
+	// Write tombstone covering the whole block.
+	err = block.Delete(ctx, 0, 10, labels.MustNewMatcher(labels.MatchEqual, defaultLabelName, "0"))
+	require.NoError(t, err)
+
+	c, err := NewLeveledCompactor(ctx, nil, promslog.NewNopLogger(), []int64{0}, nil, nil)
+	require.NoError(t, err)
+
+	ulids, err := c.Compact(tmpdir, []string{blockDir}, []*Block{block})
+	require.NoError(t, err)
+	require.Nil(t, ulids)
+	require.NoError(t, block.Close())
+}
+
+func TestDelayedCompaction(t *testing.T) {
+	// The delay is chosen in such a way as to not slow down the tests, but also to make
+	// the effective compaction duration negligible compared to it, so that the duration comparisons make sense.
+	delay := 1000 * time.Millisecond
+
+	waitUntilCompactedAndCheck := func(db *DB) {
+		t.Helper()
+		start := time.Now()
+		for db.head.compactable() {
+			// This simulates what happens at the end of commits, for less busy DB, a compaction
+			// is triggered every minute. This is to speed up the test.
+			select {
+			case db.compactc <- struct{}{}:
+			default:
+			}
+			time.Sleep(time.Millisecond)
+		}
+		duration := time.Since(start)
+		// Only waited for one offset: offset<=delay<<<2*offset
+		require.Greater(t, duration, db.opts.CompactionDelay)
+		require.Less(t, duration, 2*db.opts.CompactionDelay)
+	}
+
+	compactAndCheck := func(db *DB) {
+		t.Helper()
+		start := time.Now()
+		db.Compact(context.Background())
+		for db.head.compactable() {
+			time.Sleep(time.Millisecond)
+		}
+		if runtime.GOOS == "windows" {
+			// TODO: enable on windows once ms resolution timers are better supported.
+			return
+		}
+		duration := time.Since(start)
+		require.Less(t, duration, delay)
+	}
+
+	cases := []struct {
+		name string
+		// The delays are chosen in such a way as to not slow down the tests, but also in a way to make the
+		// effective compaction duration negligible compared to them, so that the duration comparisons make sense.
+		compactionDelay time.Duration
+	}{
+		{
+			"delayed compaction not enabled",
+			0,
+		},
+		{
+			"delayed compaction enabled",
+			delay,
+		},
+	}
+
+	for _, c := range cases {
+		c := c
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+
+			var options *Options
+			if c.compactionDelay > 0 {
+				options = &Options{CompactionDelay: c.compactionDelay}
+			}
+			db := openTestDB(t, options, []int64{10})
+			defer func() {
+				require.NoError(t, db.Close())
+			}()
+
+			label := labels.FromStrings("foo", "bar")
+
+			// The first compaction is expected to result in 1 block.
+			db.DisableCompactions()
+			app := db.Appender(context.Background())
+			_, err := app.Append(0, label, 0, 0)
+			require.NoError(t, err)
+			_, err = app.Append(0, label, 11, 0)
+			require.NoError(t, err)
+			_, err = app.Append(0, label, 21, 0)
+			require.NoError(t, err)
+			require.NoError(t, app.Commit())
+
+			if c.compactionDelay == 0 {
+				// When delay is not enabled, compaction should run on the first trigger.
+				compactAndCheck(db)
+			} else {
+				db.EnableCompactions()
+				waitUntilCompactedAndCheck(db)
+				// The db.compactc signals have been processed multiple times since a compaction is triggered every 1ms by waitUntilCompacted.
+				// This implies that the compaction delay doesn't block or wait on the initial trigger.
+				// 3 is an arbitrary value because it's difficult to determine the precise value.
+				require.GreaterOrEqual(t, prom_testutil.ToFloat64(db.metrics.compactionsTriggered)-prom_testutil.ToFloat64(db.metrics.compactionsSkipped), 3.0)
+				// The delay doesn't change the head blocks alignment.
+				require.Eventually(t, func() bool {
+					return db.head.MinTime() == db.compactor.(*LeveledCompactor).ranges[0]+1
+				}, 500*time.Millisecond, 10*time.Millisecond)
+				// One compaction was run and one block was produced.
+				require.Equal(t, 1.0, prom_testutil.ToFloat64(db.compactor.(*LeveledCompactor).metrics.Ran))
+			}
+
+			// The second compaction is expected to result in 2 blocks.
+			// This ensures that the logic for compaction delay doesn't only work for the first compaction, but also takes into account the future compactions.
+			// This also ensures that no delay happens between consecutive compactions.
+			db.DisableCompactions()
+			app = db.Appender(context.Background())
+			_, err = app.Append(0, label, 31, 0)
+			require.NoError(t, err)
+			_, err = app.Append(0, label, 41, 0)
+			require.NoError(t, err)
+			require.NoError(t, app.Commit())
+
+			if c.compactionDelay == 0 {
+				// Compaction should still run on the first trigger.
+				compactAndCheck(db)
+			} else {
+				db.EnableCompactions()
+				waitUntilCompactedAndCheck(db)
+			}
+
+			// Two other compactions were run.
+			require.Eventually(t, func() bool {
+				return prom_testutil.ToFloat64(db.compactor.(*LeveledCompactor).metrics.Ran) == 3.0
+			}, 500*time.Millisecond, 10*time.Millisecond)
+
+			if c.compactionDelay == 0 {
+				return
+			}
+
+			// This test covers a special case. If auto compaction is in a delay period and a manual compaction is triggered,
+			// auto compaction should stop waiting for the delay if the head is no longer compactable.
+			// Of course, if the head is still compactable after the manual compaction, auto compaction will continue waiting for the same delay.
+			getTimeWhenCompactionDelayStarted := func() time.Time {
+				t.Helper()
+				db.cmtx.Lock()
+				defer db.cmtx.Unlock()
+				return db.timeWhenCompactionDelayStarted
+			}
+
+			db.DisableCompactions()
+			app = db.Appender(context.Background())
+			_, err = app.Append(0, label, 51, 0)
+			require.NoError(t, err)
+			require.NoError(t, app.Commit())
+
+			require.True(t, db.head.compactable())
+			db.EnableCompactions()
+			// Trigger an auto compaction.
+			db.compactc <- struct{}{}
+			// That made auto compaction start waiting for the delay.
+			require.Eventually(t, func() bool {
+				return !getTimeWhenCompactionDelayStarted().IsZero()
+			}, 100*time.Millisecond, 10*time.Millisecond)
+			// Trigger a manual compaction.
+			require.NoError(t, db.CompactHead(NewRangeHead(db.Head(), 0, 50.0)))
+			require.Equal(t, 4.0, prom_testutil.ToFloat64(db.compactor.(*LeveledCompactor).metrics.Ran))
+			// Re-trigger an auto compaction.
+			db.compactc <- struct{}{}
+			// That made auto compaction stop waiting for the delay.
+			require.Eventually(t, func() bool {
+				return getTimeWhenCompactionDelayStarted().IsZero()
+			}, 100*time.Millisecond, 10*time.Millisecond)
+		})
+	}
+}
+
+// TestDelayedCompactionDoesNotBlockUnrelatedOps makes sure that when delayed compaction is enabled,
+// operations that don't directly derive from the Head compaction are not delayed, here we consider disk blocks compaction.
+func TestDelayedCompactionDoesNotBlockUnrelatedOps(t *testing.T) {
+	cases := []struct {
+		name            string
+		whenCompactable bool
+	}{
+		{
+			"Head is compactable",
+			true,
+		},
+		{
+			"Head is not compactable",
+			false,
+		},
+	}
+
+	for _, c := range cases {
+		c := c
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+
+			tmpdir := t.TempDir()
+			// Some blocks that need compaction are present.
+			createBlock(t, tmpdir, genSeries(1, 1, 0, 100))
+			createBlock(t, tmpdir, genSeries(1, 1, 100, 200))
+			createBlock(t, tmpdir, genSeries(1, 1, 200, 300))
+
+			options := DefaultOptions()
+			// This will make the test timeout if compaction really waits for it.
+			options.CompactionDelay = time.Hour
+			db, err := open(tmpdir, promslog.NewNopLogger(), nil, options, []int64{10, 200}, nil)
+			require.NoError(t, err)
+			defer func() {
+				require.NoError(t, db.Close())
+			}()
+
+			db.DisableCompactions()
+			require.Len(t, db.Blocks(), 3)
+
+			if c.whenCompactable {
+				label := labels.FromStrings("foo", "bar")
+				app := db.Appender(context.Background())
+				_, err := app.Append(0, label, 301, 0)
+				require.NoError(t, err)
+				_, err = app.Append(0, label, 317, 0)
+				require.NoError(t, err)
+				require.NoError(t, app.Commit())
+				// The Head is compactable and will still be at the end.
+				require.True(t, db.head.compactable())
+				defer func() {
+					require.True(t, db.head.compactable())
+				}()
+			}
+
+			// The blocks were compacted.
+			db.Compact(context.Background())
+			require.Len(t, db.Blocks(), 2)
+		})
+	}
 }

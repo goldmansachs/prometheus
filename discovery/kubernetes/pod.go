@@ -17,28 +17,25 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net"
 	"strconv"
 	"strings"
 
-	"github.com/go-kit/log"
-	"github.com/go-kit/log/level"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/common/model"
+	"github.com/prometheus/common/promslog"
 	apiv1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 
 	"github.com/prometheus/prometheus/discovery/targetgroup"
-	"github.com/prometheus/prometheus/util/strutil"
 )
 
-const nodeIndex = "node"
-
-var (
-	podAddCount    = eventCount.WithLabelValues("pod", "add")
-	podUpdateCount = eventCount.WithLabelValues("pod", "update")
-	podDeleteCount = eventCount.WithLabelValues("pod", "delete")
+const (
+	nodeIndex = "node"
+	podIndex  = "pod"
 )
 
 // Pod discovers new pod targets.
@@ -47,15 +44,19 @@ type Pod struct {
 	nodeInf          cache.SharedInformer
 	withNodeMetadata bool
 	store            cache.Store
-	logger           log.Logger
+	logger           *slog.Logger
 	queue            *workqueue.Type
 }
 
 // NewPod creates a new pod discovery.
-func NewPod(l log.Logger, pods cache.SharedIndexInformer, nodes cache.SharedInformer) *Pod {
+func NewPod(l *slog.Logger, pods cache.SharedIndexInformer, nodes cache.SharedInformer, eventCount *prometheus.CounterVec) *Pod {
 	if l == nil {
-		l = log.NewNopLogger()
+		l = promslog.NewNopLogger()
 	}
+
+	podAddCount := eventCount.WithLabelValues(RolePod.String(), MetricLabelRoleAdd)
+	podDeleteCount := eventCount.WithLabelValues(RolePod.String(), MetricLabelRoleDelete)
+	podUpdateCount := eventCount.WithLabelValues(RolePod.String(), MetricLabelRoleUpdate)
 
 	p := &Pod{
 		podInf:           pods,
@@ -63,7 +64,7 @@ func NewPod(l log.Logger, pods cache.SharedIndexInformer, nodes cache.SharedInfo
 		withNodeMetadata: nodes != nil,
 		store:            pods.GetStore(),
 		logger:           l,
-		queue:            workqueue.NewNamed("pod"),
+		queue:            workqueue.NewNamed(RolePod.String()),
 	}
 	_, err := p.podInf.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(o interface{}) {
@@ -80,7 +81,7 @@ func NewPod(l log.Logger, pods cache.SharedIndexInformer, nodes cache.SharedInfo
 		},
 	})
 	if err != nil {
-		level.Error(l).Log("msg", "Error adding pods event handler.", "err", err)
+		l.Error("Error adding pods event handler.", "err", err)
 	}
 
 	if p.withNodeMetadata {
@@ -94,12 +95,15 @@ func NewPod(l log.Logger, pods cache.SharedIndexInformer, nodes cache.SharedInfo
 				p.enqueuePodsForNode(node.Name)
 			},
 			DeleteFunc: func(o interface{}) {
-				node := o.(*apiv1.Node)
-				p.enqueuePodsForNode(node.Name)
+				nodeName, err := nodeName(o)
+				if err != nil {
+					l.Error("Error getting Node name", "err", err)
+				}
+				p.enqueuePodsForNode(nodeName)
 			},
 		})
 		if err != nil {
-			level.Error(l).Log("msg", "Error adding pods event handler.", "err", err)
+			l.Error("Error adding pods event handler.", "err", err)
 		}
 	}
 
@@ -126,7 +130,7 @@ func (p *Pod) Run(ctx context.Context, ch chan<- []*targetgroup.Group) {
 
 	if !cache.WaitForCacheSync(ctx.Done(), cacheSyncs...) {
 		if !errors.Is(ctx.Err(), context.Canceled) {
-			level.Error(p.logger).Log("msg", "pod informer unable to sync cache")
+			p.logger.Error("pod informer unable to sync cache")
 		}
 		return
 	}
@@ -163,7 +167,7 @@ func (p *Pod) process(ctx context.Context, ch chan<- []*targetgroup.Group) bool 
 	}
 	pod, err := convertToPod(o)
 	if err != nil {
-		level.Error(p.logger).Log("msg", "converting to Pod object failed", "err", err)
+		p.logger.Error("converting to Pod object failed", "err", err)
 		return true
 	}
 	send(ctx, ch, p.buildPod(pod))
@@ -180,7 +184,6 @@ func convertToPod(o interface{}) (*apiv1.Pod, error) {
 }
 
 const (
-	podNameLabel                  = metaLabelPrefix + "pod_name"
 	podIPLabel                    = metaLabelPrefix + "pod_ip"
 	podContainerNameLabel         = metaLabelPrefix + "pod_container_name"
 	podContainerIDLabel           = metaLabelPrefix + "pod_container_id"
@@ -191,10 +194,6 @@ const (
 	podContainerIsInit            = metaLabelPrefix + "pod_container_init"
 	podReadyLabel                 = metaLabelPrefix + "pod_ready"
 	podPhaseLabel                 = metaLabelPrefix + "pod_phase"
-	podLabelPrefix                = metaLabelPrefix + "pod_label_"
-	podLabelPresentPrefix         = metaLabelPrefix + "pod_labelpresent_"
-	podAnnotationPrefix           = metaLabelPrefix + "pod_annotation_"
-	podAnnotationPresentPrefix    = metaLabelPrefix + "pod_annotationpresent_"
 	podNodeNameLabel              = metaLabelPrefix + "pod_node_name"
 	podHostIPLabel                = metaLabelPrefix + "pod_host_ip"
 	podUID                        = metaLabelPrefix + "pod_uid"
@@ -215,7 +214,6 @@ func GetControllerOf(controllee metav1.Object) *metav1.OwnerReference {
 
 func podLabels(pod *apiv1.Pod) model.LabelSet {
 	ls := model.LabelSet{
-		podNameLabel:     lv(pod.ObjectMeta.Name),
 		podIPLabel:       lv(pod.Status.PodIP),
 		podReadyLabel:    podReady(pod),
 		podPhaseLabel:    lv(string(pod.Status.Phase)),
@@ -223,6 +221,8 @@ func podLabels(pod *apiv1.Pod) model.LabelSet {
 		podHostIPLabel:   lv(pod.Status.HostIP),
 		podUID:           lv(string(pod.ObjectMeta.UID)),
 	}
+
+	addObjectMetaLabels(ls, pod.ObjectMeta, RolePod)
 
 	createdBy := GetControllerOf(pod)
 	if createdBy != nil {
@@ -232,18 +232,6 @@ func podLabels(pod *apiv1.Pod) model.LabelSet {
 		if createdBy.Name != "" {
 			ls[podControllerName] = lv(createdBy.Name)
 		}
-	}
-
-	for k, v := range pod.Labels {
-		ln := strutil.SanitizeLabelName(k)
-		ls[model.LabelName(podLabelPrefix+ln)] = lv(v)
-		ls[model.LabelName(podLabelPresentPrefix+ln)] = presentValue
-	}
-
-	for k, v := range pod.Annotations {
-		ln := strutil.SanitizeLabelName(k)
-		ls[model.LabelName(podAnnotationPrefix+ln)] = lv(v)
-		ls[model.LabelName(podAnnotationPresentPrefix+ln)] = presentValue
 	}
 
 	return ls
@@ -261,7 +249,7 @@ func (p *Pod) findPodContainerStatus(statuses *[]apiv1.ContainerStatus, containe
 func (p *Pod) findPodContainerID(statuses *[]apiv1.ContainerStatus, containerName string) string {
 	cStatus, err := p.findPodContainerStatus(statuses, containerName)
 	if err != nil {
-		level.Debug(p.logger).Log("msg", "cannot find container ID", "err", err)
+		p.logger.Debug("cannot find container ID", "err", err)
 		return ""
 	}
 	return cStatus.ContainerID
@@ -330,7 +318,7 @@ func (p *Pod) buildPod(pod *apiv1.Pod) *targetgroup.Group {
 func (p *Pod) enqueuePodsForNode(nodeName string) {
 	pods, err := p.podInf.GetIndexer().ByIndex(nodeIndex, nodeName)
 	if err != nil {
-		level.Error(p.logger).Log("msg", "Error getting pods for node", "node", nodeName, "err", err)
+		p.logger.Error("Error getting pods for node", "node", nodeName, "err", err)
 		return
 	}
 
@@ -344,7 +332,7 @@ func podSource(pod *apiv1.Pod) string {
 }
 
 func podSourceFromNamespaceAndName(namespace, name string) string {
-	return "pod/" + namespace + "/" + name
+	return "pod/" + namespacedName(namespace, name)
 }
 
 func podReady(pod *apiv1.Pod) model.LabelValue {

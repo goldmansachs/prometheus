@@ -14,12 +14,10 @@ vector, which if not provided it will default to the value of the expression
 _Notes about the experimental native histograms:_
 
 * Ingesting native histograms has to be enabled via a [feature
-  flag](../feature_flags/#native-histograms). As long as no native histograms
+  flag](../feature_flags.md#native-histograms). As long as no native histograms
   have been ingested into the TSDB, all functions will behave as usual.
 * Functions that do not explicitly mention native histograms in their
-  documentation (see below) effectively treat a native histogram as a float
-  sample of value 0. (This is confusing and will change before native
-  histograms become a stable feature.)
+  documentation (see below) will ignore histogram samples.
 * Functions that do already act on native histograms might still change their
   behavior in the future.
 * If a function requires the same bucket layout between multiple native
@@ -81,7 +79,12 @@ labels of the 1-element output vector from the input vector.
 ## `ceil()`
 
 `ceil(v instant-vector)` rounds the sample values of all elements in `v` up to
-the nearest integer.
+the nearest integer value greater than or equal to v.
+
+* `ceil(+Inf) = +Inf`
+* `ceil(±0) = ±0`
+* `ceil(1.49) = 2.0`
+* `ceil(1.78) = 2.0`
 
 ## `changes()`
 
@@ -95,8 +98,9 @@ vector.
 clamps the sample values of all elements in `v` to have a lower limit of `min` and an upper limit of `max`.
 
 Special cases:
-- Return an empty vector if `min > max`
-- Return `NaN` if `min` or `max` is `NaN`
+
+* Return an empty vector if `min > max`
+* Return `NaN` if `min` or `max` is `NaN`
 
 ## `clamp_max()`
 
@@ -147,7 +151,7 @@ delta(cpu_temp_celsius{host="zeus"}[2h])
 ```
 
 `delta` acts on native histograms by calculating a new histogram where each
-compononent (sum and count of observations, buckets) is the difference between
+component (sum and count of observations, buckets) is the difference between
 the respective component in the first and last native histogram in
 `v`. However, each element in `v` that contains a mix of float and native
 histogram samples within the range, will be missing from the result vector.
@@ -175,7 +179,33 @@ Special cases are:
 ## `floor()`
 
 `floor(v instant-vector)` rounds the sample values of all elements in `v` down
-to the nearest integer.
+to the nearest integer value smaller than or equal to v.
+
+* `floor(+Inf) = +Inf`
+* `floor(±0) = ±0`
+* `floor(1.49) = 1.0`
+* `floor(1.78) = 1.0`
+
+## `histogram_avg()`
+
+_This function only acts on native histograms, which are an experimental
+feature. The behavior of this function may change in future versions of
+Prometheus, including its removal from PromQL._
+
+`histogram_avg(v instant-vector)` returns the arithmetic average of observed values stored in
+a native histogram. Samples that are not native histograms are ignored and do
+not show up in the returned vector.
+
+Use `histogram_avg` as demonstrated below to compute the average request duration
+over a 5-minute window from a native histogram:
+
+    histogram_avg(rate(http_request_duration_seconds[5m]))
+
+Which is equivalent to the following query:
+
+      histogram_sum(rate(http_request_duration_seconds[5m]))
+    /
+      histogram_count(rate(http_request_duration_seconds[5m]))
 
 ## `histogram_count()` and `histogram_sum()`
 
@@ -194,13 +224,6 @@ Use `histogram_count` in the following way to calculate a rate of observations
 (in this case corresponding to “requests per second”) from a native histogram:
 
     histogram_count(rate(http_request_duration_seconds[10m]))
-
-The additional use of `histogram_sum` enables the calculation of the average of
-observed values (in this case corresponding to “average request duration”):
-
-      histogram_sum(rate(http_request_duration_seconds[10m]))
-	/
-      histogram_count(rate(http_request_duration_seconds[10m]))
 
 ## `histogram_fraction()`
 
@@ -240,23 +263,23 @@ boundaries are inclusive or exclusive.
 ## `histogram_quantile()`
 
 `histogram_quantile(φ scalar, b instant-vector)` calculates the φ-quantile (0 ≤
-φ ≤ 1) from a [conventional
+φ ≤ 1) from a [classic
 histogram](https://prometheus.io/docs/concepts/metric_types/#histogram) or from
 a native histogram. (See [histograms and
 summaries](https://prometheus.io/docs/practices/histograms) for a detailed
-explanation of φ-quantiles and the usage of the (conventional) histogram metric
+explanation of φ-quantiles and the usage of the (classic) histogram metric
 type in general.)
 
 _Note that native histograms are an experimental feature. The behavior of this
 function when dealing with native histograms may change in future versions of
 Prometheus._
 
-The conventional float samples in `b` are considered the counts of observations
-in each bucket of one or more conventional histograms. Each float sample must
-have a label `le` where the label value denotes the inclusive upper bound of
-the bucket. (Float samples without such a label are silently ignored.) The
-other labels and the metric name are used to identify the buckets belonging to
-each conventional histogram. The [histogram metric
+The float samples in `b` are considered the counts of observations in each
+bucket of one or more classic histograms. Each float sample must have a label
+`le` where the label value denotes the inclusive upper bound of the bucket.
+(Float samples without such a label are silently ignored.) The other labels and
+the metric name are used to identify the buckets belonging to each classic
+histogram. The [histogram metric
 type](https://prometheus.io/docs/concepts/metric_types/#histogram)
 automatically provides time series with the `_bucket` suffix and the
 appropriate labels.
@@ -264,17 +287,17 @@ appropriate labels.
 The native histogram samples in `b` are treated each individually as a separate
 histogram to calculate the quantile from.
 
-As long as no naming collisions arise, `b` may contain a mix of conventional
+As long as no naming collisions arise, `b` may contain a mix of classic
 and native histograms.
 
 Use the `rate()` function to specify the time window for the quantile
 calculation.
 
 Example: A histogram metric is called `http_request_duration_seconds` (and
-therefore the metric name for the buckets of a conventional histogram is
+therefore the metric name for the buckets of a classic histogram is
 `http_request_duration_seconds_bucket`). To calculate the 90th percentile of request
 durations over the last 10m, use the following expression in case
-`http_request_duration_seconds` is a conventional histogram:
+`http_request_duration_seconds` is a classic histogram:
 
     histogram_quantile(0.9, rate(http_request_duration_seconds_bucket[10m]))
 
@@ -285,9 +308,9 @@ For a native histogram, use the following expression instead:
 The quantile is calculated for each label combination in
 `http_request_duration_seconds`. To aggregate, use the `sum()` aggregator
 around the `rate()` function. Since the `le` label is required by
-`histogram_quantile()` to deal with conventional histograms, it has to be
+`histogram_quantile()` to deal with classic histograms, it has to be
 included in the `by` clause. The following expression aggregates the 90th
-percentile by `job` for conventional histograms:
+percentile by `job` for classic histograms:
 
     histogram_quantile(0.9, sum by (job, le) (rate(http_request_duration_seconds_bucket[10m])))
 	
@@ -295,7 +318,7 @@ When aggregating native histograms, the expression simplifies to:
 
     histogram_quantile(0.9, sum by (job) (rate(http_request_duration_seconds[10m])))
 
-To aggregate all conventional histograms, specify only the `le` label:
+To aggregate all classic histograms, specify only the `le` label:
 
     histogram_quantile(0.9, sum by (le) (rate(http_request_duration_seconds_bucket[10m])))
 
@@ -303,32 +326,101 @@ With native histograms, aggregating everything works as usual without any `by` c
 
     histogram_quantile(0.9, sum(rate(http_request_duration_seconds[10m])))
 
-The `histogram_quantile()` function interpolates quantile values by
-assuming a linear distribution within a bucket. 
+In the (common) case that a quantile value does not coincide with a bucket
+boundary, the `histogram_quantile()` function interpolates the quantile value
+within the bucket the quantile value falls into. For classic histograms, for
+native histograms with custom bucket boundaries, and for the zero bucket of
+other native histograms, it assumes a uniform distribution of observations
+within the bucket (also called _linear interpolation_). For the
+non-zero-buckets of native histograms with a standard exponential bucketing
+schema, the interpolation is done under the assumption that the samples within
+the bucket are distributed in a way that they would uniformly populate the
+buckets in a hypothetical histogram with higher resolution. (This is also
+called _exponential interpolation_.)
 
 If `b` has 0 observations, `NaN` is returned. For φ < 0, `-Inf` is
 returned. For φ > 1, `+Inf` is returned. For φ = `NaN`, `NaN` is returned.
 
-The following is only relevant for conventional histograms: If `b` contains
-fewer than two buckets, `NaN` is returned. The highest bucket must have an
-upper bound of `+Inf`. (Otherwise, `NaN` is returned.) If a quantile is located
-in the highest bucket, the upper bound of the second highest bucket is
-returned. A lower limit of the lowest bucket is assumed to be 0 if the upper
-bound of that bucket is greater than
-0. In that case, the usual linear interpolation is applied within that
-bucket. Otherwise, the upper bound of the lowest bucket is returned for
-quantiles located in the lowest bucket. 
+Special cases for classic histograms:
 
+* If `b` contains fewer than two buckets, `NaN` is returned.
+* The highest bucket must have an upper bound of `+Inf`. (Otherwise, `NaN` is
+  returned.)
+* If a quantile is located in the highest bucket, the upper bound of the second
+  highest bucket is returned.
+* The lower limit of the lowest bucket is assumed to be 0 if the upper bound of
+  that bucket is greater than 0. In that case, the usual linear interpolation
+  is applied within that bucket. Otherwise, the upper bound of the lowest
+  bucket is returned for quantiles located in the lowest bucket.
 
-## `holt_winters()`
+Special cases for native histograms (relevant for the exact interpolation
+happening within the zero bucket):
 
-`holt_winters(v range-vector, sf scalar, tf scalar)` produces a smoothed value
+* A zero bucket with finite width is assumed to contain no negative
+  observations if the histogram has observations in positive buckets, but none
+  in negative buckets.
+* A zero bucket with finite width is assumed to contain no positive
+  observations if the histogram has observations in negative buckets, but none
+  in positive buckets.
+
+You can use `histogram_quantile(0, v instant-vector)` to get the estimated
+minimum value stored in a histogram.
+
+You can use `histogram_quantile(1, v instant-vector)` to get the estimated
+maximum value stored in a histogram.
+
+Buckets of classic histograms are cumulative. Therefore, the following should
+always be the case:
+
+* The counts in the buckets are monotonically increasing (strictly
+  non-decreasing).
+* A lack of observations between the upper limits of two consecutive buckets
+  results in equal counts in those two buckets.
+
+However, floating point precision issues (e.g. small discrepancies introduced
+by computing of buckets with `sum(rate(...))`) or invalid data might violate
+these assumptions. In that case, `histogram_quantile` would be unable to return
+meaningful results. To mitigate the issue, `histogram_quantile` assumes that
+tiny relative differences between consecutive buckets are happening because of
+floating point precision errors and ignores them. (The threshold to ignore a
+difference between two buckets is a trillionth (1e-12) of the sum of both
+buckets.) Furthermore, if there are non-monotonic bucket counts even after this
+adjustment, they are increased to the value of the previous buckets to enforce
+monotonicity. The latter is evidence for an actual issue with the input data
+and is therefore flagged with an informational annotation reading `input to
+histogram_quantile needed to be fixed for monotonicity`. If you encounter this
+annotation, you should find and remove the source of the invalid data.
+
+## `histogram_stddev()` and `histogram_stdvar()`
+
+_Both functions only act on native histograms, which are an experimental
+feature. The behavior of these functions may change in future versions of
+Prometheus, including their removal from PromQL._
+
+`histogram_stddev(v instant-vector)` returns the estimated standard deviation
+of observations in a native histogram, based on the geometric mean of the buckets
+where the observations lie. Samples that are not native histograms are ignored and
+do not show up in the returned vector.
+
+Similarly, `histogram_stdvar(v instant-vector)` returns the estimated standard
+variance of observations in a native histogram.
+
+## `double_exponential_smoothing()`
+
+**This function has to be enabled via the [feature flag](../feature_flags.md#experimental-promql-functions) `--enable-feature=promql-experimental-functions`.**
+
+`double_exponential_smoothing(v range-vector, sf scalar, tf scalar)` produces a smoothed value
 for time series based on the range in `v`. The lower the smoothing factor `sf`,
 the more importance is given to old data. The higher the trend factor `tf`, the
 more trends in the data is considered. Both `sf` and `tf` must be between 0 and
 1.
+For additional details, refer to [NIST Engineering Statistics Handbook](https://www.itl.nist.gov/div898/handbook/pmc/section4/pmc433.htm).
+In Prometheus V2 this function was called `holt_winters`. This caused confusion
+since the Holt-Winters method usually refers to triple exponential smoothing.
+Double exponential smoothing as implemented here is also referred to as "Holt
+Linear".
 
-`holt_winters` should only be used with gauges.
+`double_exponential_smoothing` should only be used with gauges.
 
 ## `hour()`
 
@@ -361,7 +453,7 @@ increase(http_requests_total{job="api-server"}[5m])
 ```
 
 `increase` acts on native histograms by calculating a new histogram where each
-compononent (sum and count of observations, buckets) is the increase between
+component (sum and count of observations, buckets) is the increase between
 the respective component in the first and last native histogram in
 `v`. However, each element in `v` that contains a mix of float and native
 histogram samples within the range, will be missing from the result vector.
@@ -371,6 +463,97 @@ components behave like counters. It is syntactic sugar for `rate(v)` multiplied
 by the number of seconds under the specified time range window, and should be
 used primarily for human readability.  Use `rate` in recording rules so that
 increases are tracked consistently on a per-second basis.
+
+## `info()` (experimental)
+
+_The `info` function is an experiment to improve UX
+around including labels from [info metrics](https://grafana.com/blog/2021/08/04/how-to-use-promql-joins-for-more-effective-queries-of-prometheus-metrics-at-scale/#info-metrics).
+The behavior of this function may change in future versions of Prometheus,
+including its removal from PromQL. `info` has to be enabled via the 
+[feature flag](../feature_flags.md#experimental-promql-functions) `--enable-feature=promql-experimental-functions`._
+
+`info(v instant-vector, [data-label-selector instant-vector])` finds, for each time 
+series in `v`, all info series with matching _identifying_ labels (more on
+this later), and adds the union of their _data_ (i.e., non-identifying) labels
+to the time series. The second argument `data-label-selector` is optional.
+It is not a real instant vector, but uses a subset of its syntax.
+It must start and end with curly braces (`{ ... }`) and may only contain label matchers.
+The label matchers are used to constrain which info series to consider
+and which data labels to add to `v`.
+
+Identifying labels of an info series are the subset of labels that uniquely
+identify the info series. The remaining labels are considered
+_data labels_ (also called non-identifying). (Note that Prometheus's concept
+of time series identity always includes _all_ the labels. For the sake of the `info`
+function, we “logically” define info series identity in a different way than
+in the conventional Prometheus view.) The identifying labels of an info series
+are used to join it to regular (non-info) series, i.e. those series that have
+the same labels as the identifying labels of the info series. The data labels, which are
+the ones added to the regular series by the `info` function, effectively encode 
+metadata key value pairs. (This implies that a change in the data labels 
+in the conventional Prometheus view constitutes the end of one info series and
+the beginning of a new info series, while the “logical” view of the `info` function is
+that the same info series continues to exist, just with different “data”.)
+
+The conventional approach of adding data labels is sometimes called a “join query”,
+as illustrated by the following example:
+
+```
+  rate(http_server_request_duration_seconds_count[2m])
+* on (job, instance) group_left (k8s_cluster_name)
+  target_info
+```
+
+The core of the query is the expression `rate(http_server_request_duration_seconds_count[2m])`.
+But to add data labels from an info metric, the user has to use elaborate
+(and not very obvious) syntax to specify which info metric to use (`target_info`), what the
+identifying labels are (`on (job, instance)`), and which data labels to add
+(`group_left (k8s_cluster_name)`).
+
+This query is not only verbose and hard to write, it might also run into an “identity crisis”:
+If any of the data labels of `target_info` changes, Prometheus sees that as a change of series
+(as alluded to above, Prometheus just has no native concept of non-identifying labels).
+If the old `target_info` series is not properly marked as stale (which can happen with certain ingestion paths),
+the query above will fail for up to 5m (the lookback delta) because it will find a conflicting 
+match with both the old and the new version of `target_info`.
+
+The `info` function not only resolves this conflict in favor of the newer series, it also simplifies the syntax
+because it knows about the available info series and what their identifying labels are. The example query
+looks like this with the `info` function:
+
+```
+info(
+  rate(http_server_request_duration_seconds_count[2m]),
+  {k8s_cluster_name=~".+"}
+)
+```
+
+The common case of adding _all_ data labels can be achieved by
+omitting the 2nd argument of the `info` function entirely, simplifying
+the example even more:
+
+```
+info(rate(http_server_request_duration_seconds_count[2m]))
+```
+
+While `info` normally automatically finds all matching info series, it's possible to
+restrict them by providing a `__name__` label matcher, e.g.
+`{__name__="target_info"}`.
+
+### Limitations
+
+In its current iteration, `info` defaults to considering only info series with
+the name `target_info`. It also assumes that the identifying info series labels are
+`instance` and `job`. `info` does support other info series names however, through
+`__name__` label matchers. E.g., one can explicitly say to consider both 
+`target_info` and `build_info` as follows:
+`{__name__=~"(target|build)_info"}`. However, the identifying labels always
+have to be `instance` and `job`.
+
+These limitations are partially defeating the purpose of the `info` function.
+At the current stage, this is an experiment to find out how useful the approach
+turns out to be in practice. A final version of the `info` function will indeed
+consider all matching info series and with their appropriate identifying labels.
 
 ## `irate()`
 
@@ -404,6 +587,8 @@ For each timeseries in `v`, `label_join(v instant-vector, dst_label string, sepa
 using `separator` and returns the timeseries with the label `dst_label` containing the joined value.
 There can be any number of `src_labels` in this function.
 
+`label_join` acts on float and histogram samples in the same way.
+
 This example will return a vector with each time series having a `foo` label with the value `a,b,c` added to it:
 
 ```
@@ -413,16 +598,22 @@ label_join(up{job="api-server",src1="a",src2="b",src3="c"}, "foo", ",", "src1", 
 ## `label_replace()`
 
 For each timeseries in `v`, `label_replace(v instant-vector, dst_label string, replacement string, src_label string, regex string)`
-matches the regular expression `regex` against the value of the label `src_label`. If it
+matches the [regular expression](./basics.md#regular-expressions) `regex` against the value of the label `src_label`. If it
 matches, the value of the label `dst_label` in the returned timeseries will be the expansion
 of `replacement`, together with the original labels in the input. Capturing groups in the
-regular expression can be referenced with `$1`, `$2`, etc. If the regular expression doesn't
-match then the timeseries is returned unchanged.
+regular expression can be referenced with `$1`, `$2`, etc. Named capturing groups in the regular expression can be referenced with `$name` (where `name` is the  capturing group name). If the regular expression doesn't match then the timeseries is returned unchanged.
+
+`label_replace` acts on float and histogram samples in the same way.
 
 This example will return timeseries with the values `a:c` at label `service` and `a` at label `foo`:
 
 ```
 label_replace(up{job="api-server",service="a:c"}, "foo", "$1", "service", "(.*):.*")
+```
+
+This second example has the same effect than the first example, and illustrates use of named capturing groups:
+```
+label_replace(up{job="api-server",service="a:c"}, "foo", "$name", "service", "(?P<name>.*):(?P<version>.*)")
 ```
 
 ## `ln()`
@@ -483,7 +674,7 @@ rate(http_requests_total{job="api-server"}[5m])
 ```
 
 `rate` acts on native histograms by calculating a new histogram where each
-compononent (sum and count of observations, buckets) is the rate of increase
+component (sum and count of observations, buckets) is the rate of increase
 between the respective component in the first and last native histogram in
 `v`. However, each element in `v` that contains a mix of float and native
 histogram samples within the range, will be missing from the result vector.
@@ -501,10 +692,21 @@ counter resets when your target restarts.
 
 For each input time series, `resets(v range-vector)` returns the number of
 counter resets within the provided time range as an instant vector. Any
-decrease in the value between two consecutive samples is interpreted as a
-counter reset.
+decrease in the value between two consecutive float samples is interpreted as a
+counter reset. A reset in a native histogram is detected in a more complex way:
+Any decrease in any bucket, including the zero bucket, or in the count of
+observation constitutes a counter reset, but also the disappearance of any
+previously populated bucket, an increase in bucket resolution, or a decrease of
+the zero-bucket width.
 
-`resets` should only be used with counters.
+`resets` should only be used with counters and counter-like native
+histograms.
+
+If the range vector contains a mix of float and histogram samples for the same
+series, counter resets are detected separately and their numbers added up. The
+change from a float to a histogram sample is _not_ considered a counter
+reset. Each float sample is compared to the next float sample, and each
+histogram is comprared to the next histogram.
 
 ## `round()`
 
@@ -526,11 +728,35 @@ have exactly one element, `scalar` will return `NaN`.
 ## `sort()`
 
 `sort(v instant-vector)` returns vector elements sorted by their sample values,
-in ascending order.
+in ascending order. Native histograms are sorted by their sum of observations.
+
+Please note that `sort` only affects the results of instant queries, as range query results always have a fixed output ordering.
 
 ## `sort_desc()`
 
 Same as `sort`, but sorts in descending order.
+
+Like `sort`, `sort_desc` only affects the results of instant queries, as range query results always have a fixed output ordering.
+
+## `sort_by_label()`
+
+**This function has to be enabled via the [feature flag](../feature_flags.md#experimental-promql-functions) `--enable-feature=promql-experimental-functions`.**
+
+`sort_by_label(v instant-vector, label string, ...)` returns vector elements sorted by the values of the given labels in ascending order. In case these label values are equal, elements are sorted by their full label sets.
+
+Please note that the sort by label functions only affect the results of instant queries, as range query results always have a fixed output ordering.
+
+This function uses [natural sort order](https://en.wikipedia.org/wiki/Natural_sort_order).
+
+## `sort_by_label_desc()`
+
+**This function has to be enabled via the [feature flag](../feature_flags.md#experimental-promql-functions) `--enable-feature=promql-experimental-functions`.**
+
+Same as `sort_by_label`, but sorts in descending order.
+
+Please note that the sort by label functions only affect the results of instant queries, as range query results always have a fixed output ordering.
+
+This function uses [natural sort order](https://en.wikipedia.org/wiki/Natural_sort_order).
 
 ## `sqrt()`
 
@@ -545,7 +771,8 @@ expression is to be evaluated.
 ## `timestamp()`
 
 `timestamp(v instant-vector)` returns the timestamp of each of the samples of
-the given vector as the number of seconds since January 1, 1970 UTC.
+the given vector as the number of seconds since January 1, 1970 UTC. It also
+works with histogram samples.
 
 ## `vector()`
 
@@ -569,31 +796,41 @@ over time and return an instant vector with per-series aggregation results:
 * `quantile_over_time(scalar, range-vector)`: the φ-quantile (0 ≤ φ ≤ 1) of the values in the specified interval.
 * `stddev_over_time(range-vector)`: the population standard deviation of the values in the specified interval.
 * `stdvar_over_time(range-vector)`: the population standard variance of the values in the specified interval.
-* `last_over_time(range-vector)`: the most recent point value in specified interval.
+* `last_over_time(range-vector)`: the most recent point value in the specified interval.
 * `present_over_time(range-vector)`: the value 1 for any series in the specified interval.
+
+If the [feature flag](../feature_flags.md#experimental-promql-functions)
+`--enable-feature=promql-experimental-functions` is set, the following
+additional functions are available:
+
+* `mad_over_time(range-vector)`: the median absolute deviation of all points in the specified interval.
 
 Note that all values in the specified interval have the same weight in the
 aggregation even if the values are not equally spaced throughout the interval.
+
+`avg_over_time`, `sum_over_time`, `count_over_time`, `last_over_time`, and
+`present_over_time` handle native histograms as expected. All other functions
+ignore histogram samples.
 
 ## Trigonometric Functions
 
 The trigonometric functions work in radians:
 
-- `acos(v instant-vector)`: calculates the arccosine of all elements in `v` ([special cases](https://pkg.go.dev/math#Acos)).
-- `acosh(v instant-vector)`: calculates the inverse hyperbolic cosine of all elements in `v` ([special cases](https://pkg.go.dev/math#Acosh)).
-- `asin(v instant-vector)`: calculates the arcsine of all elements in `v` ([special cases](https://pkg.go.dev/math#Asin)).
-- `asinh(v instant-vector)`: calculates the inverse hyperbolic sine of all elements in `v` ([special cases](https://pkg.go.dev/math#Asinh)).
-- `atan(v instant-vector)`: calculates the arctangent of all elements in `v` ([special cases](https://pkg.go.dev/math#Atan)).
-- `atanh(v instant-vector)`: calculates the inverse hyperbolic tangent of all elements in `v` ([special cases](https://pkg.go.dev/math#Atanh)).
-- `cos(v instant-vector)`: calculates the cosine of all elements in `v` ([special cases](https://pkg.go.dev/math#Cos)).
-- `cosh(v instant-vector)`: calculates the hyperbolic cosine of all elements in `v` ([special cases](https://pkg.go.dev/math#Cosh)).
-- `sin(v instant-vector)`: calculates the sine of all elements in `v` ([special cases](https://pkg.go.dev/math#Sin)).
-- `sinh(v instant-vector)`: calculates the hyperbolic sine of all elements in `v` ([special cases](https://pkg.go.dev/math#Sinh)).
-- `tan(v instant-vector)`: calculates the tangent of all elements in `v` ([special cases](https://pkg.go.dev/math#Tan)).
-- `tanh(v instant-vector)`: calculates the hyperbolic tangent of all elements in `v` ([special cases](https://pkg.go.dev/math#Tanh)).
+* `acos(v instant-vector)`: calculates the arccosine of all elements in `v` ([special cases](https://pkg.go.dev/math#Acos)).
+* `acosh(v instant-vector)`: calculates the inverse hyperbolic cosine of all elements in `v` ([special cases](https://pkg.go.dev/math#Acosh)).
+* `asin(v instant-vector)`: calculates the arcsine of all elements in `v` ([special cases](https://pkg.go.dev/math#Asin)).
+* `asinh(v instant-vector)`: calculates the inverse hyperbolic sine of all elements in `v` ([special cases](https://pkg.go.dev/math#Asinh)).
+* `atan(v instant-vector)`: calculates the arctangent of all elements in `v` ([special cases](https://pkg.go.dev/math#Atan)).
+* `atanh(v instant-vector)`: calculates the inverse hyperbolic tangent of all elements in `v` ([special cases](https://pkg.go.dev/math#Atanh)).
+* `cos(v instant-vector)`: calculates the cosine of all elements in `v` ([special cases](https://pkg.go.dev/math#Cos)).
+* `cosh(v instant-vector)`: calculates the hyperbolic cosine of all elements in `v` ([special cases](https://pkg.go.dev/math#Cosh)).
+* `sin(v instant-vector)`: calculates the sine of all elements in `v` ([special cases](https://pkg.go.dev/math#Sin)).
+* `sinh(v instant-vector)`: calculates the hyperbolic sine of all elements in `v` ([special cases](https://pkg.go.dev/math#Sinh)).
+* `tan(v instant-vector)`: calculates the tangent of all elements in `v` ([special cases](https://pkg.go.dev/math#Tan)).
+* `tanh(v instant-vector)`: calculates the hyperbolic tangent of all elements in `v` ([special cases](https://pkg.go.dev/math#Tanh)).
 
 The following are useful for converting between degrees and radians:
 
-- `deg(v instant-vector)`: converts radians to degrees for all elements in `v`.
-- `pi()`: returns pi.
-- `rad(v instant-vector)`: converts degrees to radians for all elements in `v`.
+* `deg(v instant-vector)`: converts radians to degrees for all elements in `v`.
+* `pi()`: returns pi.
+* `rad(v instant-vector)`: converts degrees to radians for all elements in `v`.

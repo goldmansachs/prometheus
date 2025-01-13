@@ -21,9 +21,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/go-kit/log"
 	v1 "github.com/prometheus/client_golang/api/prometheus/v1"
 	"github.com/prometheus/common/model"
+	"github.com/prometheus/common/promslog"
 	"github.com/stretchr/testify/require"
 
 	"github.com/prometheus/prometheus/model/labels"
@@ -35,7 +35,7 @@ type mockQueryRangeAPI struct {
 	samples model.Matrix
 }
 
-func (mockAPI mockQueryRangeAPI) QueryRange(ctx context.Context, query string, r v1.Range, opts ...v1.Option) (model.Value, v1.Warnings, error) {
+func (mockAPI mockQueryRangeAPI) QueryRange(_ context.Context, query string, r v1.Range, opts ...v1.Option) (model.Value, v1.Warnings, error) {
 	return mockAPI.samples, v1.Warnings{}, nil
 }
 
@@ -43,6 +43,7 @@ const defaultBlockDuration = time.Duration(tsdb.DefaultBlockDuration) * time.Mil
 
 // TestBackfillRuleIntegration is an integration test that runs all the rule importer code to confirm the parts work together.
 func TestBackfillRuleIntegration(t *testing.T) {
+	t.Parallel()
 	const (
 		testMaxSampleCount = 50
 		testValue          = 123
@@ -72,13 +73,13 @@ func TestBackfillRuleIntegration(t *testing.T) {
 	}
 	for _, tt := range testCases {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			tmpDir := t.TempDir()
 			ctx := context.Background()
 
 			// Execute the test more than once to simulate running the rule importer twice with the same data.
 			// We expect duplicate blocks with the same series are created when run more than once.
 			for i := 0; i < tt.runcount; i++ {
-
 				ruleImporter, err := newTestRuleImporter(ctx, start, tmpDir, tt.samples, tt.maxBlockDuration)
 				require.NoError(t, err)
 				path1 := filepath.Join(tmpDir, "test.file")
@@ -91,13 +92,13 @@ func TestBackfillRuleIntegration(t *testing.T) {
 				for _, err := range errs {
 					require.NoError(t, err)
 				}
-				require.Equal(t, 3, len(ruleImporter.groups))
+				require.Len(t, ruleImporter.groups, 3)
 				group1 := ruleImporter.groups[path1+";group0"]
 				require.NotNil(t, group1)
 				const defaultInterval = 60
 				require.Equal(t, defaultInterval*time.Second, group1.Interval())
 				gRules := group1.Rules()
-				require.Equal(t, 1, len(gRules))
+				require.Len(t, gRules, 1)
 				require.Equal(t, "rule1", gRules[0].Name())
 				require.Equal(t, "ruleExpr", gRules[0].Query().String())
 				require.Equal(t, 1, gRules[0].Labels().Len())
@@ -106,7 +107,7 @@ func TestBackfillRuleIntegration(t *testing.T) {
 				require.NotNil(t, group2)
 				require.Equal(t, defaultInterval*time.Second, group2.Interval())
 				g2Rules := group2.Rules()
-				require.Equal(t, 2, len(g2Rules))
+				require.Len(t, g2Rules, 2)
 				require.Equal(t, "grp2_rule1", g2Rules[0].Name())
 				require.Equal(t, "grp2_rule1_expr", g2Rules[0].Query().String())
 				require.Equal(t, 0, g2Rules[0].Labels().Len())
@@ -122,12 +123,12 @@ func TestBackfillRuleIntegration(t *testing.T) {
 				require.NoError(t, err)
 
 				blocks := db.Blocks()
-				require.Equal(t, (i+1)*tt.expectedBlockCount, len(blocks))
+				require.Len(t, blocks, (i+1)*tt.expectedBlockCount)
 
-				q, err := db.Querier(context.Background(), math.MinInt64, math.MaxInt64)
+				q, err := db.Querier(math.MinInt64, math.MaxInt64)
 				require.NoError(t, err)
 
-				selectedSeries := q.Select(false, nil, labels.MustNewMatcher(labels.MatchRegexp, "", ".*"))
+				selectedSeries := q.Select(ctx, false, nil, labels.MustNewMatcher(labels.MatchRegexp, "", ".*"))
 				var seriesCount, samplesCount int
 				for selectedSeries.Next() {
 					seriesCount++
@@ -161,8 +162,8 @@ func TestBackfillRuleIntegration(t *testing.T) {
 	}
 }
 
-func newTestRuleImporter(ctx context.Context, start time.Time, tmpDir string, testSamples model.Matrix, maxBlockDuration time.Duration) (*ruleImporter, error) {
-	logger := log.NewNopLogger()
+func newTestRuleImporter(_ context.Context, start time.Time, tmpDir string, testSamples model.Matrix, maxBlockDuration time.Duration) (*ruleImporter, error) {
+	logger := promslog.NewNopLogger()
 	cfg := ruleImporterConfig{
 		outputDir:        tmpDir,
 		start:            start.Add(-10 * time.Hour),
@@ -211,6 +212,7 @@ func createMultiRuleTestFiles(path string) error {
 // TestBackfillLabels confirms that the labels in the rule file override the labels from the metrics
 // received from Prometheus Query API, including the __name__ label.
 func TestBackfillLabels(t *testing.T) {
+	t.Parallel()
 	tmpDir := t.TempDir()
 	ctx := context.Background()
 
@@ -248,11 +250,12 @@ func TestBackfillLabels(t *testing.T) {
 	db, err := tsdb.Open(tmpDir, nil, nil, opts, nil)
 	require.NoError(t, err)
 
-	q, err := db.Querier(context.Background(), math.MinInt64, math.MaxInt64)
+	q, err := db.Querier(math.MinInt64, math.MaxInt64)
 	require.NoError(t, err)
 
 	t.Run("correct-labels", func(t *testing.T) {
-		selectedSeries := q.Select(false, nil, labels.MustNewMatcher(labels.MatchRegexp, "", ".*"))
+		t.Parallel()
+		selectedSeries := q.Select(ctx, false, nil, labels.MustNewMatcher(labels.MatchRegexp, "", ".*"))
 		for selectedSeries.Next() {
 			series := selectedSeries.At()
 			expectedLabels := labels.FromStrings("__name__", "rulename", "name1", "value-from-rule")

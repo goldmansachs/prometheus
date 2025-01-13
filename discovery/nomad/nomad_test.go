@@ -21,16 +21,19 @@ import (
 	"net/url"
 	"testing"
 
-	"github.com/go-kit/log"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/common/model"
+	"github.com/prometheus/common/promslog"
 	"github.com/stretchr/testify/require"
+
+	"github.com/prometheus/prometheus/discovery"
 )
 
 type NomadSDTestSuite struct {
 	Mock *SDMock
 }
 
-// SDMock is the interface for the nomad mock
+// SDMock is the interface for the nomad mock.
 type SDMock struct {
 	t      *testing.T
 	Server *httptest.Server
@@ -124,11 +127,37 @@ func (m *SDMock) HandleServiceHashiCupsGet() {
 }
 
 func TestConfiguredService(t *testing.T) {
-	conf := &SDConfig{
-		Server: "http://localhost:4646",
+	testCases := []struct {
+		name        string
+		server      string
+		acceptedURL bool
+	}{
+		{"invalid hostname URL", "http://foo.bar:4646", true},
+		{"invalid even though accepted by parsing", "foo.bar:4646", true},
+		{"valid address URL", "http://172.30.29.23:4646", true},
+		{"invalid URL", "172.30.29.23:4646", false},
 	}
-	_, err := NewDiscovery(conf, nil)
-	require.NoError(t, err)
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			conf := &SDConfig{
+				Server: tc.server,
+			}
+
+			reg := prometheus.NewRegistry()
+			refreshMetrics := discovery.NewRefreshMetrics(reg)
+			metrics := conf.NewDiscovererMetrics(reg, refreshMetrics)
+			require.NoError(t, metrics.Register())
+			defer metrics.Unregister()
+
+			_, err := NewDiscovery(conf, nil, metrics)
+			if tc.acceptedURL {
+				require.NoError(t, err)
+			} else {
+				require.Error(t, err)
+			}
+		})
+	}
 }
 
 func TestNomadSDRefresh(t *testing.T) {
@@ -141,18 +170,26 @@ func TestNomadSDRefresh(t *testing.T) {
 
 	cfg := DefaultSDConfig
 	cfg.Server = endpoint.String()
-	d, err := NewDiscovery(&cfg, log.NewNopLogger())
+
+	reg := prometheus.NewRegistry()
+	refreshMetrics := discovery.NewRefreshMetrics(reg)
+	metrics := cfg.NewDiscovererMetrics(reg, refreshMetrics)
+	require.NoError(t, metrics.Register())
+	defer metrics.Unregister()
+	defer refreshMetrics.Unregister()
+
+	d, err := NewDiscovery(&cfg, promslog.NewNopLogger(), metrics)
 	require.NoError(t, err)
 
 	tgs, err := d.refresh(context.Background())
 	require.NoError(t, err)
 
-	require.Equal(t, 1, len(tgs))
+	require.Len(t, tgs, 1)
 
 	tg := tgs[0]
 	require.NotNil(t, tg)
 	require.NotNil(t, tg.Targets)
-	require.Equal(t, 1, len(tg.Targets))
+	require.Len(t, tg.Targets, 1)
 
 	lbls := model.LabelSet{
 		"__address__":                  model.LabelValue("127.0.0.1:30456"),

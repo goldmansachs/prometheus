@@ -21,8 +21,8 @@ import (
 	"os"
 	"testing"
 
-	"github.com/go-kit/log"
 	"github.com/prometheus/common/model"
+	"github.com/prometheus/common/promslog"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v2"
 )
@@ -41,17 +41,17 @@ application_secret: %s
 consumer_key: %s`, mock.URL, ovhcloudApplicationKeyTest, ovhcloudApplicationSecretTest, ovhcloudConsumerKeyTest)
 
 	require.NoError(t, yaml.UnmarshalStrict([]byte(cfgString), &cfg))
-	d, err := newRefresher(&cfg, log.NewNopLogger())
+	d, err := newRefresher(&cfg, promslog.NewNopLogger())
 	require.NoError(t, err)
 	ctx := context.Background()
 	targetGroups, err := d.refresh(ctx)
 	require.NoError(t, err)
 
-	require.Equal(t, 1, len(targetGroups))
+	require.Len(t, targetGroups, 1)
 	targetGroup := targetGroups[0]
 	require.NotNil(t, targetGroup)
 	require.NotNil(t, targetGroup.Targets)
-	require.Equal(t, 1, len(targetGroup.Targets))
+	require.Len(t, targetGroup.Targets, 1)
 
 	for i, lbls := range []model.LabelSet{
 		{
@@ -84,7 +84,7 @@ func MockDedicatedAPI(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	if string(r.URL.Path) == "/dedicated/server" {
+	if r.URL.Path == "/dedicated/server" {
 		dedicatedServersList, err := os.ReadFile("testdata/dedicated_server/dedicated_servers.json")
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -96,7 +96,7 @@ func MockDedicatedAPI(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	if string(r.URL.Path) == "/dedicated/server/abcde" {
+	if r.URL.Path == "/dedicated/server/abcde" {
 		dedicatedServer, err := os.ReadFile("testdata/dedicated_server/dedicated_servers_details.json")
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -108,7 +108,7 @@ func MockDedicatedAPI(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	if string(r.URL.Path) == "/dedicated/server/abcde/ips" {
+	if r.URL.Path == "/dedicated/server/abcde/ips" {
 		dedicatedServerIPs, err := os.ReadFile("testdata/dedicated_server/dedicated_servers_abcde_ips.json")
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)

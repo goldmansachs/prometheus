@@ -16,7 +16,10 @@ package config
 const ruleFilesConfigFile = "testdata/rules_abs_path_windows.good.yml"
 
 var ruleFilesExpectedConf = &Config{
+	loaded: true,
+
 	GlobalConfig: DefaultGlobalConfig,
+	Runtime:      DefaultRuntimeConfig,
 	RuleFiles: []string{
 		"testdata\\first.rules",
 		"testdata\\rules\\second.rules",

@@ -14,13 +14,14 @@
 package web
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
+	"slices"
 	"sort"
+	"strings"
 
-	"github.com/go-kit/log/level"
 	"github.com/gogo/protobuf/proto"
-	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
 	dto "github.com/prometheus/client_model/go"
 	"github.com/prometheus/common/expfmt"
@@ -56,19 +57,17 @@ func (h *Handler) federation(w http.ResponseWriter, req *http.Request) {
 	h.mtx.RLock()
 	defer h.mtx.RUnlock()
 
+	ctx := req.Context()
+
 	if err := req.ParseForm(); err != nil {
 		http.Error(w, fmt.Sprintf("error parsing form values: %v", err), http.StatusBadRequest)
 		return
 	}
 
-	var matcherSets [][]*labels.Matcher
-	for _, s := range req.Form["match[]"] {
-		matchers, err := parser.ParseMetricSelector(s)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		matcherSets = append(matcherSets, matchers)
+	matcherSets, err := parser.ParseMetricSelectors(req.Form["match[]"])
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
 	}
 
 	var (
@@ -79,10 +78,10 @@ func (h *Handler) federation(w http.ResponseWriter, req *http.Request) {
 	)
 	w.Header().Set("Content-Type", string(format))
 
-	q, err := h.localStorage.Querier(req.Context(), mint, maxt)
+	q, err := h.localStorage.Querier(mint, maxt)
 	if err != nil {
 		federationErrors.Inc()
-		if errors.Cause(err) == tsdb.ErrNotReady {
+		if errors.Is(err, tsdb.ErrNotReady) {
 			http.Error(w, err.Error(), http.StatusServiceUnavailable)
 			return
 		}
@@ -97,11 +96,11 @@ func (h *Handler) federation(w http.ResponseWriter, req *http.Request) {
 
 	var sets []storage.SeriesSet
 	for _, mset := range matcherSets {
-		s := q.Select(true, hints, mset...)
+		s := q.Select(ctx, true, hints, mset...)
 		sets = append(sets, s)
 	}
 
-	set := storage.NewMergeSeriesSet(sets, storage.ChainedSeriesMerge)
+	set := storage.NewMergeSeriesSet(sets, 0, storage.ChainedSeriesMerge)
 	it := storage.NewBuffer(int64(h.lookbackDelta / 1e6))
 	var chkIter chunkenc.Iterator
 Loop:
@@ -115,41 +114,49 @@ Loop:
 
 		var (
 			t  int64
-			v  float64
-			h  *histogram.Histogram
+			f  float64
 			fh *histogram.FloatHistogram
-			ok bool
 		)
 		valueType := it.Seek(maxt)
 		switch valueType {
 		case chunkenc.ValFloat:
-			t, v = it.At()
+			t, f = it.At()
 		case chunkenc.ValFloatHistogram, chunkenc.ValHistogram:
-			t, fh = it.AtFloatHistogram()
+			t, fh = it.AtFloatHistogram(nil)
 		default:
-			t, v, h, fh, ok = it.PeekBack(1)
+			sample, ok := it.PeekBack(1)
 			if !ok {
 				continue Loop
 			}
-			if h != nil {
-				fh = h.ToFloat()
+			t = sample.T()
+			switch sample.Type() {
+			case chunkenc.ValFloat:
+				f = sample.F()
+			case chunkenc.ValHistogram:
+				fh = sample.H().ToFloat(nil)
+			case chunkenc.ValFloatHistogram:
+				fh = sample.FH()
+			default:
+				continue Loop
 			}
 		}
 		// The exposition formats do not support stale markers, so drop them. This
 		// is good enough for staleness handling of federated data, as the
 		// interval-based limits on staleness will do the right thing for supported
 		// use cases (which is to say federating aggregated time series).
-		if value.IsStaleNaN(v) {
+		if value.IsStaleNaN(f) || (fh != nil && value.IsStaleNaN(fh.Sum)) {
 			continue
 		}
 
 		vec = append(vec, promql.Sample{
 			Metric: s.Labels(),
-			Point:  promql.Point{T: t, V: v, H: fh},
+			T:      t,
+			F:      f,
+			H:      fh,
 		})
 	}
 	if ws := set.Warnings(); len(ws) > 0 {
-		level.Debug(h.logger).Log("msg", "Federation select returned warnings", "warnings", ws)
+		h.logger.Debug("Federation select returned warnings", "warnings", ws)
 		federationWarnings.Add(float64(len(ws)))
 	}
 	if set.Err() != nil {
@@ -158,7 +165,11 @@ Loop:
 		return
 	}
 
-	sort.Sort(byName(vec))
+	slices.SortFunc(vec, func(a, b promql.Sample) int {
+		ni := a.Metric.Get(labels.MetricName)
+		nj := b.Metric.Get(labels.MetricName)
+		return strings.Compare(ni, nj)
+	})
 
 	externalLabels := h.config.GlobalConfig.ExternalLabels.Map()
 	if _, ok := externalLabels[model.InstanceLabel]; !ok {
@@ -177,8 +188,9 @@ Loop:
 	)
 	for _, s := range vec {
 		isHistogram := s.H != nil
+		formatType := format.FormatType()
 		if isHistogram &&
-			format != expfmt.FmtProtoDelim && format != expfmt.FmtProtoText && format != expfmt.FmtProtoCompact {
+			formatType != expfmt.TypeProtoDelim && formatType != expfmt.TypeProtoText && formatType != expfmt.TypeProtoCompact {
 			// Can't serve the native histogram.
 			// TODO(codesome): Serve them when other protocols get the native histogram support.
 			continue
@@ -240,11 +252,11 @@ Loop:
 		})
 		if err != nil {
 			federationErrors.Inc()
-			level.Error(h.logger).Log("msg", "federation failed", "err", err)
+			h.logger.Error("federation failed", "err", err)
 			return
 		}
 		if !nameSeen {
-			level.Warn(h.logger).Log("msg", "Ignoring nameless metric during federation", "metric", s.Metric)
+			h.logger.Warn("Ignoring nameless metric during federation", "metric", s.Metric)
 			continue
 		}
 		// Attach global labels if they do not exist yet.
@@ -262,7 +274,7 @@ Loop:
 		if !isHistogram {
 			lastHistogramWasGauge = false
 			protMetric.Untyped = &dto.Untyped{
-				Value: proto.Float64(s.V),
+				Value: proto.Float64(s.F),
 			}
 		} else {
 			lastHistogramWasGauge = s.H.CounterResetHint == histogram.GaugeType
@@ -301,19 +313,7 @@ Loop:
 	if protMetricFam != nil {
 		if err := enc.Encode(protMetricFam); err != nil {
 			federationErrors.Inc()
-			level.Error(h.logger).Log("msg", "federation failed", "err", err)
+			h.logger.Error("federation failed", "err", err)
 		}
 	}
-}
-
-// byName makes a model.Vector sortable by metric name.
-type byName promql.Vector
-
-func (vec byName) Len() int      { return len(vec) }
-func (vec byName) Swap(i, j int) { vec[i], vec[j] = vec[j], vec[i] }
-
-func (vec byName) Less(i, j int) bool {
-	ni := vec[i].Metric.Get(labels.MetricName)
-	nj := vec[j].Metric.Get(labels.MetricName)
-	return ni < nj
 }

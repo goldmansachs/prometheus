@@ -23,11 +23,13 @@ import (
 	"github.com/prometheus/prometheus/discovery/targetgroup"
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/model/relabel"
+	"github.com/prometheus/prometheus/util/testutil"
 
 	"github.com/stretchr/testify/require"
 )
 
 func TestSDCheckResult(t *testing.T) {
+	t.Parallel()
 	targetGroups := []*targetgroup.Group{{
 		Targets: []model.LabelSet{
 			map[model.LabelName]model.LabelValue{"__address__": "localhost:8080", "foo": "bar"},
@@ -35,7 +37,7 @@ func TestSDCheckResult(t *testing.T) {
 	}}
 
 	reg, err := relabel.NewRegexp("(.*)")
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	scrapeConfig := &config.ScrapeConfig{
 		ScrapeInterval: model.Duration(1 * time.Minute),
@@ -69,5 +71,5 @@ func TestSDCheckResult(t *testing.T) {
 		},
 	}
 
-	require.Equal(t, expectedSDCheckResult, getSDCheckResult(targetGroups, scrapeConfig, true))
+	testutil.RequireEqual(t, expectedSDCheckResult, getSDCheckResult(targetGroups, scrapeConfig))
 }
