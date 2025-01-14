@@ -287,7 +287,6 @@ func (n *Manager) checkAlertmanagers() {
 			case <-n.ctx.Done():
 				return
 			default:
-				ams.mtx.RLock()
 				var activeAms []alertmanager
 				var innerWg sync.WaitGroup
 				results := make(chan alertmanager, len(ams.ams))
@@ -316,18 +315,16 @@ func (n *Manager) checkAlertmanagers() {
 					activeAms = append(activeAms, am)
 				}
 				n.metrics.offline.WithLabelValues(id).Set(float64(len(ams.ams) - len(activeAms)))
-				ams.mtx.RUnlock()
 				n.mtx.Lock()
 				dams, ok := n.dynamicAlertmanagers[id]
 				n.mtx.Unlock()
 				if !ok {
 					return
 				}
-
 				// Update the active alertmanagers
 				dams.mtx.Lock()
+				defer dams.mtx.Unlock()
 				if len(activeAms) == 0 {
-					dams.mtx.Unlock()
 					return
 				}
 				if len(activeAms) != len(dams.ams) {
@@ -344,9 +341,8 @@ func (n *Manager) checkAlertmanagers() {
 						dams.ams = activeAms
 					}
 				}
-				dams.mtx.Unlock()
 			}
-		}(id, ams)
+		}(id, ams.Copy())
 	}
 	wg.Wait()
 }
@@ -355,7 +351,7 @@ func (n *Manager) isAlertmanagerActive(u *url.URL, timeout time.Duration) bool {
 	client := &http.Client{
 		Timeout: timeout,
 	}
-	u.Path = path.Join(u.Path, "/-/healthy")
+	u.Path = "/-/healthy"
 	resp, err := client.Get(u.String())
 	if err != nil || resp.StatusCode != http.StatusOK {
 		return false
@@ -372,18 +368,19 @@ func (n *Manager) ApplyConfig(conf *config.Config) error {
 	n.opts.RelabelConfigs = conf.AlertingConfig.AlertRelabelConfigs
 
 	amSets := make(map[string]*alertmanagerSet)
+	damSets := make(map[string]*alertmanagerSet)
 
 	for k, cfg := range conf.AlertingConfig.AlertmanagerConfigs.ToMap() {
 		ams, err := newAlertmanagerSet(cfg, n.logger, n.metrics)
 		if err != nil {
 			return err
 		}
-
 		amSets[k] = ams
+		damSets[k] = ams.Copy()
 	}
 
 	n.alertmanagers = amSets
-	n.dynamicAlertmanagers = amSets
+	n.dynamicAlertmanagers = damSets
 
 	return nil
 }
@@ -842,6 +839,29 @@ func newAlertmanagerSet(cfg *config.AlertmanagerConfig, logger log.Logger, metri
 		metrics: metrics,
 	}
 	return s, nil
+}
+
+func (s *alertmanagerSet) Copy() *alertmanagerSet {
+	s.mtx.RLock()
+	defer s.mtx.RUnlock()
+
+	copyAms := make([]alertmanager, len(s.ams))
+	copyDroppedAms := make([]alertmanager, len(s.droppedAms))
+	for i, am := range s.ams {
+		copyAms[i] = am
+	}
+	for i, dam := range s.droppedAms {
+		copyDroppedAms[i] = dam
+	}
+
+	return &alertmanagerSet{
+		cfg:        s.cfg,
+		client:     s.client,
+		metrics:    s.metrics,
+		ams:        copyAms,
+		droppedAms: copyDroppedAms,
+		logger:     s.logger,
+	}
 }
 
 // sync extracts a deduplicated set of Alertmanager endpoints from a list
