@@ -1,4 +1,4 @@
-module github.com/prometheus/prometheus
+module github.com/goldmansachs/prometheus
 
 go 1.21
 
@@ -204,6 +204,7 @@ require (
 replace (
 	k8s.io/klog => github.com/simonpasquier/klog-gokit v0.3.0
 	k8s.io/klog/v2 => github.com/simonpasquier/klog-gokit/v3 v3.3.0
+	github.com/prometheus/common => github.com/goldmansachs/common  594932cf043924f15f6ddad2f5003dddbfac8af1
 )
 
 // Exclude linodego v1.0.0 as it is no longer published on github.
