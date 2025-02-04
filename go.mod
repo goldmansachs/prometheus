@@ -1,4 +1,4 @@
-module github.com/goldmansachs/prometheus
+module github.com/prometheus/prometheus
 
 go 1.21
 
@@ -162,6 +162,7 @@ require (
 	github.com/mailru/easyjson v0.7.7 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mattn/go-isatty v0.0.19 // indirect
+	github.com/matttproud/golang_protobuf_extensions v1.0.4 // indirect
 	github.com/mitchellh/go-homedir v1.1.0 // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
 	github.com/moby/term v0.0.0-20210619224110-3f7ff695adc6 // indirect
@@ -202,9 +203,10 @@ require (
 )
 
 replace (
+	github.com/prometheus/common => github.com/goldmansachs/common v0.0.0-20231109155305-594932cf0439
+	github.com/prometheus/prometheus => ./
 	k8s.io/klog => github.com/simonpasquier/klog-gokit v0.3.0
 	k8s.io/klog/v2 => github.com/simonpasquier/klog-gokit/v3 v3.3.0
-	github.com/prometheus/common => github.com/goldmansachs/common  594932cf043924f15f6ddad2f5003dddbfac8af1
 )
 
 // Exclude linodego v1.0.0 as it is no longer published on github.
