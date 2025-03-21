@@ -1,13 +1,15 @@
-load("@io_bazel_rules_go//go:def.bzl", "go_library")
+load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
 
 go_library(
     name = "prometheusremotewrite",
     srcs = [
+        "context.go",
         "helper.go",
         "histograms.go",
         "metrics_to_prw.go",
         "number_data_points.go",
         "otlp_to_openmetrics_metadata.go",
+        "timeseries.go",
     ],
     importpath = "github.com/prometheus/prometheus/storage/remote/otlptranslator/prometheusremotewrite",
     visibility = ["//visibility:public"],
@@ -16,6 +18,8 @@ go_library(
         "//model/value",
         "//prompb",
         "//storage/remote/otlptranslator/prometheus",
+        "//util/annotations",
+        "@com_github_cespare_xxhash_v2//:xxhash",
         "@com_github_prometheus_common//model",
         "@io_opentelemetry_go_collector_pdata//pcommon",
         "@io_opentelemetry_go_collector_pdata//pmetric",
@@ -28,4 +32,27 @@ alias(
     name = "go_default_library",
     actual = ":prometheusremotewrite",
     visibility = ["//visibility:public"],
+)
+
+go_test(
+    name = "prometheusremotewrite_test",
+    srcs = [
+        "context_test.go",
+        "helper_test.go",
+        "histograms_test.go",
+        "metrics_to_prw_test.go",
+        "number_data_points_test.go",
+        "testutil_test.go",
+    ],
+    embed = [":prometheusremotewrite"],
+    deps = [
+        "//prompb",
+        "//storage/remote/otlptranslator/prometheus",
+        "@com_github_prometheus_common//model",
+        "@com_github_stretchr_testify//assert",
+        "@com_github_stretchr_testify//require",
+        "@io_opentelemetry_go_collector_pdata//pcommon",
+        "@io_opentelemetry_go_collector_pdata//pmetric",
+        "@io_opentelemetry_go_collector_pdata//pmetric/pmetricotlp",
+    ],
 )

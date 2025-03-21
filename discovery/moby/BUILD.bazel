@@ -22,6 +22,7 @@ go_library(
         "@com_github_docker_docker//api/types",
         "@com_github_docker_docker//api/types/container",
         "@com_github_docker_docker//api/types/filters",
+        "@com_github_docker_docker//api/types/network",
         "@com_github_docker_docker//api/types/swarm",
         "@com_github_docker_docker//client",
         "@com_github_go_kit_log//:log",

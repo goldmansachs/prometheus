@@ -41,6 +41,7 @@ go_test(
         "//tsdb/chunks",
         "//tsdb/encoding",
         "//util/testutil",
+        "@com_github_grafana_regexp//:regexp",
         "@com_github_stretchr_testify//require",
         "@org_uber_go_goleak//:goleak",
     ],

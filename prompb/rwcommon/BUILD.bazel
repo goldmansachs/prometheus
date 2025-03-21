@@ -1,0 +1,15 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_test")
+
+go_test(
+    name = "rwcommon_test",
+    srcs = ["codec_test.go"],
+    deps = [
+        "//model/histogram",
+        "//model/labels",
+        "//model/metadata",
+        "//prompb",
+        "//prompb/io/prometheus/write/v2:write",
+        "@com_github_prometheus_common//model",
+        "@com_github_stretchr_testify//require",
+    ],
+)

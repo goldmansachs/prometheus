@@ -3,6 +3,7 @@ load("@io_bazel_rules_go//go:def.bzl", "go_library")
 go_library(
     name = "prompb",
     srcs = [
+        "codec.go",
         "custom.go",
         "remote.pb.go",
         "types.pb.go",
@@ -10,8 +11,12 @@ go_library(
     importpath = "github.com/prometheus/prometheus/prompb",
     visibility = ["//visibility:public"],
     deps = [
-        "@com_github_gogo_protobuf//gogoproto:go_default_library",
-        "@com_github_gogo_protobuf//proto:go_default_library",
+        "//model/exemplar",
+        "//model/histogram",
+        "//model/labels",
+        "@com_github_gogo_protobuf//gogoproto",
+        "@com_github_gogo_protobuf//proto",
+        "@com_github_prometheus_common//model",
     ],
 )
 

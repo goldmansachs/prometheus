@@ -6,8 +6,10 @@ go_library(
     importpath = "github.com/prometheus/prometheus/documentation/examples/remote_storage/example_write_adapter",
     visibility = ["//visibility:private"],
     deps = [
+        "//model/labels",
+        "//prompb",
+        "//prompb/io/prometheus/write/v2:write",
         "//storage/remote",
-        "@com_github_prometheus_common//model",
     ],
 )
 

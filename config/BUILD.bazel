@@ -11,6 +11,7 @@ go_library(
         "//model/labels",
         "//model/relabel",
         "//storage/remote/azuread",
+        "//storage/remote/googleiam",
         "@com_github_alecthomas_units//:units",
         "@com_github_go_kit_log//:log",
         "@com_github_go_kit_log//level",

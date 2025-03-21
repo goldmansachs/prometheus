@@ -47,12 +47,14 @@ go_test(
     name = "rules_test",
     srcs = [
         "alerting_test.go",
+        "group_test.go",
         "manager_test.go",
         "origin_test.go",
         "recording_test.go",
     ],
     embed = [":rules"],
     deps = [
+        "//model/histogram",
         "//model/labels",
         "//model/relabel",
         "//model/rulefmt",
@@ -61,6 +63,7 @@ go_test(
         "//notifier",
         "//promql",
         "//promql/parser",
+        "//promql/promqltest",
         "//storage",
         "//tsdb/chunkenc",
         "//tsdb/tsdbutil",
@@ -73,6 +76,5 @@ go_test(
         "@com_github_stretchr_testify//require",
         "@in_gopkg_yaml_v2//:yaml_v2",
         "@org_uber_go_atomic//:atomic",
-        "@org_uber_go_goleak//:goleak",
     ],
 )

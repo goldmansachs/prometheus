@@ -14,7 +14,7 @@ go_library(
         "@com_github_alecthomas_kingpin_v2//:kingpin",
         "@com_github_go_kit_log//:log",
         "@com_github_go_kit_log//level",
-        "@com_github_gogo_protobuf//proto:go_default_library",
+        "@com_github_gogo_protobuf//proto",
         "@com_github_golang_snappy//:snappy",
         "@com_github_influxdata_influxdb//client/v2:go_default_library",
         "@com_github_prometheus_client_golang//prometheus",

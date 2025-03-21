@@ -1,0 +1,20 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "junitxml",
+    srcs = ["junitxml.go"],
+    importpath = "github.com/prometheus/prometheus/util/junitxml",
+    visibility = ["//visibility:public"],
+)
+
+alias(
+    name = "go_default_library",
+    actual = ":junitxml",
+    visibility = ["//visibility:public"],
+)
+
+go_test(
+    name = "junitxml_test",
+    srcs = ["junitxml_test.go"],
+    embed = [":junitxml"],
+)

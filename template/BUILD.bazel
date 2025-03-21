@@ -13,6 +13,7 @@ go_library(
         "//util/strutil",
         "@com_github_grafana_regexp//:regexp",
         "@com_github_prometheus_client_golang//prometheus",
+        "@com_github_prometheus_common//helpers/templates",
         "@com_github_prometheus_common//model",
     ],
 )
@@ -31,6 +32,7 @@ go_test(
     ],
     embed = [":template"],
     deps = [
+        "//model/histogram",
         "//model/labels",
         "//promql",
         "@com_github_stretchr_testify//require",

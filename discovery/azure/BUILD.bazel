@@ -45,6 +45,10 @@ go_test(
     deps = [
         "@com_github_azure_azure_sdk_for_go_sdk_azcore//arm",
         "@com_github_azure_azure_sdk_for_go_sdk_resourcemanager_compute_armcompute_v5//:armcompute",
+        "@com_github_azure_azure_sdk_for_go_sdk_resourcemanager_network_armnetwork_v4//:armnetwork",
+        "@com_github_code_hex_go_generics_cache//:go-generics-cache",
+        "@com_github_code_hex_go_generics_cache//policy/lru",
+        "@com_github_go_kit_log//:log",
         "@com_github_stretchr_testify//require",
         "@org_uber_go_goleak//:goleak",
     ],

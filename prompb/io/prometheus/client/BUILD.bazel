@@ -6,9 +6,9 @@ go_library(
     importpath = "github.com/prometheus/prometheus/prompb/io/prometheus/client",
     visibility = ["//visibility:public"],
     deps = [
-        "@com_github_gogo_protobuf//gogoproto:go_default_library",
-        "@com_github_gogo_protobuf//proto:go_default_library",
-        "@com_github_gogo_protobuf//types:go_default_library",
+        "@com_github_gogo_protobuf//gogoproto",
+        "@com_github_gogo_protobuf//proto",
+        "@com_github_gogo_protobuf//types",
     ],
 )
 

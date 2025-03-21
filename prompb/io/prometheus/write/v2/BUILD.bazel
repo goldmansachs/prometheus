@@ -1,0 +1,44 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "write",
+    srcs = [
+        "codec.go",
+        "custom.go",
+        "symbols.go",
+        "types.pb.go",
+    ],
+    importpath = "github.com/prometheus/prometheus/prompb/io/prometheus/write/v2",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//model/exemplar",
+        "//model/histogram",
+        "//model/labels",
+        "//model/metadata",
+        "@com_github_gogo_protobuf//gogoproto",
+        "@com_github_gogo_protobuf//proto",
+        "@com_github_prometheus_common//model",
+    ],
+)
+
+alias(
+    name = "go_default_library",
+    actual = ":write",
+    visibility = ["//visibility:public"],
+)
+
+go_test(
+    name = "write_test",
+    srcs = [
+        "custom_test.go",
+        "symbols_test.go",
+        "types_test.go",
+    ],
+    embed = [":write"],
+    deps = [
+        "//model/labels",
+        "//prompb",
+        "@com_github_gogo_protobuf//proto",
+        "@com_github_stretchr_testify//require",
+    ],
+)

@@ -1,0 +1,19 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "googleiam",
+    srcs = ["googleiam.go"],
+    importpath = "github.com/prometheus/prometheus/storage/remote/googleiam",
+    visibility = ["//visibility:public"],
+    deps = [
+        "@org_golang_google_api//option",
+        "@org_golang_google_api//transport/http",
+        "@org_golang_x_oauth2//google",
+    ],
+)
+
+alias(
+    name = "go_default_library",
+    actual = ":googleiam",
+    visibility = ["//visibility:public"],
+)

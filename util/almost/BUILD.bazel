@@ -1,0 +1,22 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "almost",
+    srcs = ["almost.go"],
+    importpath = "github.com/prometheus/prometheus/util/almost",
+    visibility = ["//visibility:public"],
+    deps = ["//model/value"],
+)
+
+alias(
+    name = "go_default_library",
+    actual = ":almost",
+    visibility = ["//visibility:public"],
+)
+
+go_test(
+    name = "almost_test",
+    srcs = ["almost_test.go"],
+    embed = [":almost"],
+    deps = ["//model/value"],
+)

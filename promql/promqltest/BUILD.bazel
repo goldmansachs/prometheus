@@ -1,0 +1,60 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "promqltest",
+    srcs = ["test.go"],
+    embedsrcs = [
+        "testdata/aggregators.test",
+        "testdata/at_modifier.test",
+        "testdata/collision.test",
+        "testdata/functions.test",
+        "testdata/histograms.test",
+        "testdata/limit.test",
+        "testdata/literals.test",
+        "testdata/name_label_dropping.test",
+        "testdata/native_histograms.test",
+        "testdata/operators.test",
+        "testdata/range_queries.test",
+        "testdata/selectors.test",
+        "testdata/staleness.test",
+        "testdata/subquery.test",
+        "testdata/trig_functions.test",
+    ],
+    importpath = "github.com/prometheus/prometheus/promql/promqltest",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//model/exemplar",
+        "//model/histogram",
+        "//model/labels",
+        "//model/timestamp",
+        "//promql",
+        "//promql/parser",
+        "//promql/parser/posrange",
+        "//storage",
+        "//util/almost",
+        "//util/teststorage",
+        "//util/testutil",
+        "@com_github_grafana_regexp//:regexp",
+        "@com_github_prometheus_common//model",
+        "@com_github_stretchr_testify//require",
+    ],
+)
+
+alias(
+    name = "go_default_library",
+    actual = ":promqltest",
+    visibility = ["//visibility:public"],
+)
+
+go_test(
+    name = "promqltest_test",
+    srcs = ["test_test.go"],
+    data = glob(["testdata/**"]),
+    embed = [":promqltest"],
+    deps = [
+        "//model/labels",
+        "//promql",
+        "//tsdb/chunkenc",
+        "@com_github_stretchr_testify//require",
+    ],
+)

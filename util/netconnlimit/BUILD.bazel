@@ -1,0 +1,21 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "netconnlimit",
+    srcs = ["netconnlimit.go"],
+    importpath = "github.com/prometheus/prometheus/util/netconnlimit",
+    visibility = ["//visibility:public"],
+)
+
+alias(
+    name = "go_default_library",
+    actual = ":netconnlimit",
+    visibility = ["//visibility:public"],
+)
+
+go_test(
+    name = "netconnlimit_test",
+    srcs = ["netconnlimit_test.go"],
+    embed = [":netconnlimit"],
+    deps = ["@com_github_stretchr_testify//require"],
+)

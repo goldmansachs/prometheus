@@ -4,6 +4,7 @@ go_library(
     name = "storage",
     srcs = [
         "buffer.go",
+        "errors.go",
         "fanout.go",
         "generic.go",
         "interface.go",
@@ -41,7 +42,9 @@ go_test(
     name = "storage_test",
     srcs = [
         "buffer_test.go",
+        "errors_test.go",
         "fanout_test.go",
+        "interface_test.go",
         "memoized_iterator_test.go",
         "merge_test.go",
         "series_test.go",

@@ -35,10 +35,13 @@ go_test(
     embed = [":notifier"],
     deps = [
         "//config",
+        "//discovery",
         "//discovery/targetgroup",
         "//model/labels",
         "//model/relabel",
+        "@com_github_go_kit_log//:log",
         "@com_github_prometheus_alertmanager//api/v2/models",
+        "@com_github_prometheus_client_golang//prometheus",
         "@com_github_prometheus_common//config",
         "@com_github_prometheus_common//model",
         "@com_github_stretchr_testify//require",

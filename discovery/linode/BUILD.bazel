@@ -33,6 +33,7 @@ go_test(
         "linode_test.go",
         "mock_test.go",
     ],
+    data = glob(["testdata/**"]),
     embed = [":linode"],
     deps = [
         "//discovery",

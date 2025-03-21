@@ -17,6 +17,7 @@ go_library(
         "@com_github_grafana_regexp//:regexp",
         "@com_github_grafana_regexp//syntax",
         "@com_github_prometheus_common//model",
+        "@org_golang_x_text//unicode/norm",
     ],
 )
 
@@ -36,7 +37,9 @@ go_test(
     ],
     embed = [":labels"],
     deps = [
+        "@com_github_grafana_regexp//:regexp",
         "@com_github_grafana_regexp//syntax",
+        "@com_github_prometheus_common//model",
         "@com_github_stretchr_testify//require",
         "@in_gopkg_yaml_v2//:yaml_v2",
     ],
