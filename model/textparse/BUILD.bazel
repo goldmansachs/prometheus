@@ -1,0 +1,54 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "textparse",
+    srcs = [
+        "interface.go",
+        "openmetricslex.l.go",
+        "openmetricsparse.go",
+        "promlex.l.go",
+        "promparse.go",
+        "protobufparse.go",
+    ],
+    importpath = "github.com/prometheus/prometheus/model/textparse",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//model/exemplar",
+        "//model/histogram",
+        "//model/labels",
+        "//model/value",
+        "//prompb/io/prometheus/client",
+        "@com_github_gogo_protobuf//proto:go_default_library",
+        "@com_github_gogo_protobuf//types:go_default_library",
+        "@com_github_prometheus_common//model",
+    ],
+)
+
+alias(
+    name = "go_default_library",
+    actual = ":textparse",
+    visibility = ["//visibility:public"],
+)
+
+go_test(
+    name = "textparse_test",
+    srcs = [
+        "interface_test.go",
+        "openmetricsparse_test.go",
+        "promparse_test.go",
+        "protobufparse_test.go",
+    ],
+    embed = [":textparse"],
+    deps = [
+        "//model/exemplar",
+        "//model/histogram",
+        "//model/labels",
+        "//prompb/io/prometheus/client",
+        "//util/testutil",
+        "@com_github_gogo_protobuf//proto:go_default_library",
+        "@com_github_klauspost_compress//gzip",
+        "@com_github_prometheus_common//expfmt",
+        "@com_github_prometheus_common//model",
+        "@com_github_stretchr_testify//require",
+    ],
+)

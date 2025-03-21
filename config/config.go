@@ -34,6 +34,7 @@ import (
 	"gopkg.in/yaml.v2"
 
 	"github.com/prometheus/prometheus/discovery"
+	"github.com/prometheus/prometheus/discovery/targetgroup"
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/model/relabel"
 	"github.com/prometheus/prometheus/storage/remote/azuread"
@@ -78,11 +79,11 @@ func Load(s string, expandExternalLabels bool, logger log.Logger) (*Config, erro
 	// If the entire config body is empty the UnmarshalYAML method is
 	// never called. We thus have to set the DefaultConfig at the entry
 	// point as well.
-	*cfg = DefaultConfig
+	//*cfg = DefaultConfig
 
 	err := yaml.UnmarshalStrict([]byte(s), cfg)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("UnmarshallStrict failure: %v", err)
 	}
 
 	if !expandExternalLabels {
@@ -175,7 +176,7 @@ var (
 		EnableCompression:       true,
 	}
 
-	// DefaultAlertmanagerConfig is the default alertmanager configuration.
+	/// DefaultAlertmanagerConfig is the default alertmanager configuration.
 	DefaultAlertmanagerConfig = AlertmanagerConfig{
 		Scheme:           "http",
 		Timeout:          model.Duration(10 * time.Second),
@@ -253,6 +254,7 @@ type Config struct {
 	RemoteWriteConfigs []*RemoteWriteConfig `yaml:"remote_write,omitempty"`
 	RemoteReadConfigs  []*RemoteReadConfig  `yaml:"remote_read,omitempty"`
 	OTLPConfig         OTLPConfig           `yaml:"otlp,omitempty"`
+	StaticConfigs      []*targetgroup.Group
 }
 
 // SetDirectory joins any relative file paths with dir.
@@ -683,7 +685,8 @@ type ScrapeConfig struct {
 	// List of target relabel configurations.
 	RelabelConfigs []*relabel.Config `yaml:"relabel_configs,omitempty"`
 	// List of metric relabel configurations.
-	MetricRelabelConfigs []*relabel.Config `yaml:"metric_relabel_configs,omitempty"`
+	MetricRelabelConfigs   []*relabel.Config `yaml:"metric_relabel_configs,omitempty"`
+	ServiceDiscoveryConfig discovery.Config
 }
 
 // SetDirectory joins any relative file paths with dir.

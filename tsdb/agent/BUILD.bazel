@@ -1,0 +1,64 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "agent",
+    srcs = [
+        "db.go",
+        "series.go",
+    ],
+    importpath = "github.com/prometheus/prometheus/tsdb/agent",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//model/exemplar",
+        "//model/histogram",
+        "//model/labels",
+        "//model/metadata",
+        "//model/timestamp",
+        "//storage",
+        "//storage/remote",
+        "//tsdb",
+        "//tsdb/chunks",
+        "//tsdb/errors",
+        "//tsdb/record",
+        "//tsdb/tsdbutil",
+        "//tsdb/wlog",
+        "//util/zeropool",
+        "@com_github_go_kit_log//:log",
+        "@com_github_go_kit_log//level",
+        "@com_github_prometheus_client_golang//prometheus",
+        "@com_github_prometheus_common//model",
+        "@org_uber_go_atomic//:atomic",
+    ],
+)
+
+alias(
+    name = "go_default_library",
+    actual = ":agent",
+    visibility = ["//visibility:public"],
+)
+
+go_test(
+    name = "agent_test",
+    srcs = [
+        "db_test.go",
+        "series_test.go",
+    ],
+    embed = [":agent"],
+    deps = [
+        "//model/exemplar",
+        "//model/labels",
+        "//storage",
+        "//storage/remote",
+        "//tsdb",
+        "//tsdb/chunks",
+        "//tsdb/record",
+        "//tsdb/tsdbutil",
+        "//tsdb/wlog",
+        "//util/testutil",
+        "@com_github_go_kit_log//:log",
+        "@com_github_prometheus_client_golang//prometheus",
+        "@com_github_prometheus_client_model//go",
+        "@com_github_prometheus_common//model",
+        "@com_github_stretchr_testify//require",
+    ],
+)

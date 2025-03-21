@@ -23,9 +23,7 @@ import (
 	"time"
 
 	"go.uber.org/atomic"
-
 	"github.com/prometheus/prometheus/promql/parser"
-
 	"github.com/go-kit/log"
 	"github.com/go-kit/log/level"
 	"github.com/prometheus/client_golang/prometheus"

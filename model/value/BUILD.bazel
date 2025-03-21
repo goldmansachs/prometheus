@@ -1,0 +1,14 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "value",
+    srcs = ["value.go"],
+    importpath = "github.com/prometheus/prometheus/model/value",
+    visibility = ["//visibility:public"],
+)
+
+alias(
+    name = "go_default_library",
+    actual = ":value",
+    visibility = ["//visibility:public"],
+)

@@ -1642,6 +1642,7 @@ func funcYear(vals []parser.Value, args parser.Expressions, enh *EvalNodeHelper)
 
 // FunctionCalls is a list of all functions supported by PromQL, including their types.
 var FunctionCalls = map[string]FunctionCall{
+	"gs_prometheus_start_time": funcGsPrometheusStartTime,
 	"abs":                funcAbs,
 	"absent":             funcAbsent,
 	"absent_over_time":   funcAbsentOverTime,
@@ -1860,4 +1861,11 @@ func stringSliceFromArgs(args parser.Expressions) []string {
 		tmp[i] = stringFromArg(args[i])
 	}
 	return tmp
+}
+
+// === hs_prometheus_start_time() float64 ===
+var gsProcessStartTime = time.Now().Unix()
+
+func funcGsPrometheusStartTime(vals []parser.Value, args parser.Expressions, enh *EvalNodeHelper)  (Vector, annotations.Annotations) {
+	return Vector{Sample{F: float64(gsProcessStartTime)}}, nil
 }

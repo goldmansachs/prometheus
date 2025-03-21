@@ -430,6 +430,11 @@ var Functions = map[string]*Function{
 		Variadic:   1,
 		ReturnType: ValueTypeVector,
 	},
+	"gs_prometheus_start_time": {
+		Name:       "gs_prometheus_start_time",
+		ArgTypes:   []ValueType{},
+		ReturnType: ValueTypeScalar,
+	},
 }
 
 // getFunction returns a predefined Function object for the given name.

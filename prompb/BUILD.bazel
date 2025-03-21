@@ -1,0 +1,22 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "prompb",
+    srcs = [
+        "custom.go",
+        "remote.pb.go",
+        "types.pb.go",
+    ],
+    importpath = "github.com/prometheus/prometheus/prompb",
+    visibility = ["//visibility:public"],
+    deps = [
+        "@com_github_gogo_protobuf//gogoproto:go_default_library",
+        "@com_github_gogo_protobuf//proto:go_default_library",
+    ],
+)
+
+alias(
+    name = "go_default_library",
+    actual = ":prompb",
+    visibility = ["//visibility:public"],
+)

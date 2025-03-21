@@ -1,0 +1,14 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "posrange",
+    srcs = ["posrange.go"],
+    importpath = "github.com/prometheus/prometheus/promql/parser/posrange",
+    visibility = ["//visibility:public"],
+)
+
+alias(
+    name = "go_default_library",
+    actual = ":posrange",
+    visibility = ["//visibility:public"],
+)
