@@ -19,18 +19,17 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log/slog"
 	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/go-kit/log"
 	"github.com/grafana/regexp"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/common/config"
 	"github.com/prometheus/common/model"
-	"github.com/prometheus/common/promslog"
 	"github.com/prometheus/common/version"
 
 	"github.com/prometheus/prometheus/discovery"
@@ -41,10 +40,10 @@ import (
 var (
 	// DefaultSDConfig is the default HTTP SD configuration.
 	DefaultSDConfig = SDConfig{
-		HTTPClientConfig: config.DefaultHTTPClientConfig,
 		RefreshInterval:  model.Duration(60 * time.Second),
+		HTTPClientConfig: config.DefaultHTTPClientConfig,
 	}
-	userAgent        = version.PrometheusUserAgent()
+	userAgent        = fmt.Sprintf("Prometheus/%s", version.Version)
 	matchContentType = regexp.MustCompile(`^(?i:application\/json(;\s*charset=("utf-8"|utf-8))?)$`)
 )
 
@@ -86,17 +85,17 @@ func (c *SDConfig) UnmarshalYAML(unmarshal func(interface{}) error) error {
 		return err
 	}
 	if c.URL == "" {
-		return errors.New("URL is missing")
+		return fmt.Errorf("URL is missing")
 	}
 	parsedURL, err := url.Parse(c.URL)
 	if err != nil {
 		return err
 	}
 	if parsedURL.Scheme != "http" && parsedURL.Scheme != "https" {
-		return errors.New("URL scheme must be 'http' or 'https'")
+		return fmt.Errorf("URL scheme must be 'http' or 'https'")
 	}
 	if parsedURL.Host == "" {
-		return errors.New("host is missing in URL")
+		return fmt.Errorf("host is missing in URL")
 	}
 	return c.HTTPClientConfig.Validate()
 }
@@ -115,14 +114,14 @@ type Discovery struct {
 }
 
 // NewDiscovery returns a new HTTP discovery for the given config.
-func NewDiscovery(conf *SDConfig, logger *slog.Logger, clientOpts []config.HTTPClientOption, metrics discovery.DiscovererMetrics) (*Discovery, error) {
+func NewDiscovery(conf *SDConfig, logger log.Logger, clientOpts []config.HTTPClientOption, metrics discovery.DiscovererMetrics) (*Discovery, error) {
 	m, ok := metrics.(*httpMetrics)
 	if !ok {
-		return nil, errors.New("invalid discovery metrics type")
+		return nil, fmt.Errorf("invalid discovery metrics type")
 	}
 
 	if logger == nil {
-		logger = promslog.NewNopLogger()
+		logger = log.NewNopLogger()
 	}
 
 	client, err := config.NewClientFromConfig(conf.HTTPClientConfig, "http", clientOpts...)

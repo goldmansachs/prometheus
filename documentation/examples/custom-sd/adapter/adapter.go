@@ -18,12 +18,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log/slog"
 	"os"
 	"path/filepath"
 	"reflect"
 	"sort"
 
+	"github.com/go-kit/log"
+	"github.com/go-kit/log/level"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/common/model"
 
@@ -54,7 +55,7 @@ type Adapter struct {
 	manager *discovery.Manager
 	output  string
 	name    string
-	logger  *slog.Logger
+	logger  log.Logger
 }
 
 func mapToArray(m map[string]*customSD) []customSD {
@@ -105,7 +106,7 @@ func (a *Adapter) refreshTargetGroups(allTargetGroups map[string][]*targetgroup.
 		a.groups = tempGroups
 		err := a.writeOutput()
 		if err != nil {
-			a.logger.With("component", "sd-adapter").Error("failed to write output", "err", err)
+			level.Error(log.With(a.logger, "component", "sd-adapter")).Log("err", err)
 		}
 	}
 }
@@ -162,7 +163,7 @@ func (a *Adapter) Run() {
 }
 
 // NewAdapter creates a new instance of Adapter.
-func NewAdapter(ctx context.Context, file, name string, d discovery.Discoverer, logger *slog.Logger, sdMetrics map[string]discovery.DiscovererMetrics, registerer prometheus.Registerer) *Adapter {
+func NewAdapter(ctx context.Context, file, name string, d discovery.Discoverer, logger log.Logger, sdMetrics map[string]discovery.DiscovererMetrics, registerer prometheus.Registerer) *Adapter {
 	return &Adapter{
 		ctx:     ctx,
 		disc:    d,

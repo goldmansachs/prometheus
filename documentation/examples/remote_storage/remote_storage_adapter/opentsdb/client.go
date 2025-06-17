@@ -19,12 +19,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log/slog"
 	"math"
 	"net/http"
 	"net/url"
 	"time"
 
+	"github.com/go-kit/log"
+	"github.com/go-kit/log/level"
 	"github.com/prometheus/common/model"
 )
 
@@ -35,14 +36,14 @@ const (
 
 // Client allows sending batches of Prometheus samples to OpenTSDB.
 type Client struct {
-	logger *slog.Logger
+	logger log.Logger
 
 	url     string
 	timeout time.Duration
 }
 
 // NewClient creates a new Client.
-func NewClient(logger *slog.Logger, url string, timeout time.Duration) *Client {
+func NewClient(logger log.Logger, url string, timeout time.Duration) *Client {
 	return &Client{
 		logger:  logger,
 		url:     url,
@@ -77,7 +78,7 @@ func (c *Client) Write(samples model.Samples) error {
 	for _, s := range samples {
 		v := float64(s.Value)
 		if math.IsNaN(v) || math.IsInf(v, 0) {
-			c.logger.Debug("Cannot send value to OpenTSDB, skipping sample", "value", v, "sample", s)
+			level.Debug(c.logger).Log("msg", "Cannot send value to OpenTSDB, skipping sample", "value", v, "sample", s)
 			continue
 		}
 		metric := TagValue(s.Metric[model.MetricNameLabel])

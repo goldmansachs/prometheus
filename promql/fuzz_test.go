@@ -29,7 +29,7 @@ func TestfuzzParseMetricWithContentTypePanicOnInvalid(t *testing.T) {
 		} else {
 			err, ok := p.(error)
 			require.True(t, ok)
-			require.ErrorContains(t, err, "duplicate parameter name")
+			require.Contains(t, err.Error(), "duplicate parameter name")
 		}
 	}()
 

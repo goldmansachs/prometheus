@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build slicelabels
+//go:build !stringlabels && !dedupelabels
 
 package labels
 
@@ -19,7 +19,6 @@ import (
 	"bytes"
 	"slices"
 	"strings"
-	"unsafe"
 
 	"github.com/cespare/xxhash/v2"
 )
@@ -32,8 +31,8 @@ func (ls Labels) Len() int           { return len(ls) }
 func (ls Labels) Swap(i, j int)      { ls[i], ls[j] = ls[j], ls[i] }
 func (ls Labels) Less(i, j int) bool { return ls[i].Name < ls[j].Name }
 
-// Bytes returns an opaque, not-human-readable, encoding of ls, usable as a map key.
-// Encoding may change over time or between runs of Prometheus.
+// Bytes returns ls as a byte slice.
+// It uses an byte invalid character as a separator and so should not be used for printing.
 func (ls Labels) Bytes(buf []byte) []byte {
 	b := bytes.NewBuffer(buf[:0])
 	b.WriteByte(labelSep)
@@ -250,7 +249,15 @@ func (ls Labels) WithoutEmpty() Labels {
 
 // Equal returns whether the two label sets are equal.
 func Equal(ls, o Labels) bool {
-	return slices.Equal(ls, o)
+	if len(ls) != len(o) {
+		return false
+	}
+	for i, l := range ls {
+		if l != o[i] {
+			return false
+		}
+	}
+	return true
 }
 
 // EmptyLabels returns n empty Labels value, for convenience.
@@ -453,7 +460,7 @@ func (b *ScratchBuilder) Add(name, value string) {
 }
 
 // UnsafeAddBytes adds a name/value pair, using []byte instead of string.
-// The default version of this function is unsafe, hence the name.
+// The '-tags stringlabels' version of this function is unsafe, hence the name.
 // This version is safe - it copies the strings immediately - but we keep the same name so everything compiles.
 func (b *ScratchBuilder) UnsafeAddBytes(name, value []byte) {
 	b.add = append(b.add, Label{Name: string(name), Value: string(value)})
@@ -480,9 +487,4 @@ func (b *ScratchBuilder) Labels() Labels {
 // Callers must ensure that there are no other references to ls, or any strings fetched from it.
 func (b *ScratchBuilder) Overwrite(ls *Labels) {
 	*ls = append((*ls)[:0], b.add...)
-}
-
-// SizeOfLabels returns the approximate space required for n copies of a label.
-func SizeOfLabels(name, value string, n uint64) uint64 {
-	return (uint64(len(name)) + uint64(unsafe.Sizeof(name)) + uint64(len(value)) + uint64(unsafe.Sizeof(value))) * n
 }

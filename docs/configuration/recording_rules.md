@@ -17,6 +17,10 @@ Rule files use YAML.
 The rule files can be reloaded at runtime by sending `SIGHUP` to the Prometheus
 process. The changes are only applied if all rule files are well-formatted.
 
+_Note about native histograms (experimental feature): Native histogram are always
+recorded as gauge histograms (for now). Most cases will create gauge histograms
+naturally, e.g. after `rate()`._
+
 ## Syntax-checking rules
 
 To quickly check whether a rule file is syntactically correct without starting
@@ -84,11 +88,6 @@ name: <string>
 
 # Offset the rule evaluation timestamp of this particular group by the specified duration into the past.
 [ query_offset: <duration> | default = global.rule_query_offset ]
-
-# Labels to add or overwrite before storing the result for its rules.
-# Labels defined in <rule> will override the key if it has a collision.
-labels:
-  [ <labelname>: <labelvalue> ]
 
 rules:
   [ - <rule> ... ]

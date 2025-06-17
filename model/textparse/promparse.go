@@ -223,9 +223,11 @@ func (p *PromParser) Comment() []byte {
 	return p.text
 }
 
-// Labels writes the labels of the current sample into the passed labels.
-func (p *PromParser) Labels(l *labels.Labels) {
-	s := yoloString(p.series)
+// Metric writes the labels of the current sample into the passed labels.
+// It returns the string from which the metric was parsed.
+func (p *PromParser) Metric(l *labels.Labels) string {
+	// Copy the buffer to a string: this is only necessary for the return value.
+	s := string(p.series)
 
 	p.builder.Reset()
 	metricName := unreplace(s[p.offsets[0]-p.start : p.offsets[1]-p.start])
@@ -237,13 +239,14 @@ func (p *PromParser) Labels(l *labels.Labels) {
 		label := unreplace(s[a:b])
 		c := p.offsets[i+2] - p.start
 		d := p.offsets[i+3] - p.start
-		value := normalizeFloatsInLabelValues(p.mtype, label, unreplace(s[c:d]))
-
+		value := unreplace(s[c:d])
 		p.builder.Add(label, value)
 	}
 
 	p.builder.Sort()
 	*l = p.builder.Labels()
+
+	return s
 }
 
 // Exemplar implements the Parser interface. However, since the classic
@@ -253,10 +256,10 @@ func (p *PromParser) Exemplar(*exemplar.Exemplar) bool {
 	return false
 }
 
-// CreatedTimestamp returns 0 as it's not implemented yet.
+// CreatedTimestamp returns nil as it's not implemented yet.
 // TODO(bwplotka): https://github.com/prometheus/prometheus/issues/12980
-func (p *PromParser) CreatedTimestamp() int64 {
-	return 0
+func (p *PromParser) CreatedTimestamp() *int64 {
+	return nil
 }
 
 // nextToken returns the next token from the promlexer. It skips over tabs
@@ -499,17 +502,13 @@ func unreplace(s string) string {
 }
 
 func yoloString(b []byte) string {
-	return unsafe.String(unsafe.SliceData(b), len(b))
-}
-
-func yoloBytes(b string) []byte {
-	return unsafe.Slice(unsafe.StringData(b), len(b))
+	return *((*string)(unsafe.Pointer(&b)))
 }
 
 func parseFloat(s string) (float64, error) {
 	// Keep to pre-Go 1.13 float formats.
 	if strings.ContainsAny(s, "pP_") {
-		return 0, errors.New("unsupported character in float")
+		return 0, fmt.Errorf("unsupported character in float")
 	}
 	return strconv.ParseFloat(s, 64)
 }

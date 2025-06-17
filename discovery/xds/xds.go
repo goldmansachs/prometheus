@@ -15,10 +15,11 @@ package xds
 
 import (
 	"context"
-	"log/slog"
 	"time"
 
 	v3 "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
+	"github.com/go-kit/log"
+	"github.com/go-kit/log/level"
 	"github.com/prometheus/common/config"
 	"github.com/prometheus/common/model"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -103,7 +104,7 @@ type fetchDiscovery struct {
 	refreshInterval time.Duration
 
 	parseResources resourceParser
-	logger         *slog.Logger
+	logger         log.Logger
 
 	metrics *xdsMetrics
 }
@@ -139,7 +140,7 @@ func (d *fetchDiscovery) poll(ctx context.Context, ch chan<- []*targetgroup.Grou
 	}
 
 	if err != nil {
-		d.logger.Error("error parsing resources", "err", err)
+		level.Error(d.logger).Log("msg", "error parsing resources", "err", err)
 		d.metrics.fetchFailuresCount.Inc()
 		return
 	}
@@ -152,12 +153,12 @@ func (d *fetchDiscovery) poll(ctx context.Context, ch chan<- []*targetgroup.Grou
 
 	parsedTargets, err := d.parseResources(response.Resources, response.TypeUrl)
 	if err != nil {
-		d.logger.Error("error parsing resources", "err", err)
+		level.Error(d.logger).Log("msg", "error parsing resources", "err", err)
 		d.metrics.fetchFailuresCount.Inc()
 		return
 	}
 
-	d.logger.Debug("Updated to version", "version", response.VersionInfo, "targets", len(parsedTargets))
+	level.Debug(d.logger).Log("msg", "Updated to version", "version", response.VersionInfo, "targets", len(parsedTargets))
 
 	select {
 	case <-ctx.Done():

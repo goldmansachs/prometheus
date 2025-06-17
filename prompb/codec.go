@@ -90,7 +90,6 @@ func (h Histogram) ToIntHistogram() *histogram.Histogram {
 		PositiveBuckets:  h.GetPositiveDeltas(),
 		NegativeSpans:    spansProtoToSpans(h.GetNegativeSpans()),
 		NegativeBuckets:  h.GetNegativeDeltas(),
-		CustomValues:     h.CustomValues,
 	}
 }
 
@@ -110,7 +109,6 @@ func (h Histogram) ToFloatHistogram() *histogram.FloatHistogram {
 			PositiveBuckets:  h.GetPositiveCounts(),
 			NegativeSpans:    spansProtoToSpans(h.GetNegativeSpans()),
 			NegativeBuckets:  h.GetNegativeCounts(),
-			CustomValues:     h.CustomValues,
 		}
 	}
 	// Conversion from integer histogram.

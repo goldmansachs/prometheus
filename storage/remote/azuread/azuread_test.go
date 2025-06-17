@@ -68,7 +68,7 @@ func (ad *AzureAdTestSuite) TestAzureAdRoundTripper() {
 	cases := []struct {
 		cfg *AzureADConfig
 	}{
-		// AzureAd roundtripper with ManagedIdentity.
+		// AzureAd roundtripper with Managedidentity.
 		{
 			cfg: &AzureADConfig{
 				Cloud: "AzurePublic",

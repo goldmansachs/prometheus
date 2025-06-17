@@ -14,6 +14,7 @@
 package promql
 
 import (
+	"fmt"
 	"math"
 	"testing"
 
@@ -107,7 +108,7 @@ func TestHistogramStatsDecoding(t *testing.T) {
 					decodedStats = append(decodedStats, h)
 				}
 				for i := 0; i < len(tc.histograms); i++ {
-					require.Equalf(t, tc.expectedHints[i], decodedStats[i].CounterResetHint, "mismatch in counter reset hint for histogram %d", i)
+					require.Equal(t, tc.expectedHints[i], decodedStats[i].CounterResetHint, fmt.Sprintf("mismatch in counter reset hint for histogram %d", i))
 					h := tc.histograms[i]
 					if value.IsStaleNaN(h.Sum) {
 						require.True(t, value.IsStaleNaN(decodedStats[i].Sum))
@@ -173,7 +174,7 @@ func (h *histogramIterator) Next() chunkenc.ValueType {
 	return chunkenc.ValNone
 }
 
-func (h *histogramIterator) Seek(_ int64) chunkenc.ValueType { panic("not implemented") }
+func (h *histogramIterator) Seek(t int64) chunkenc.ValueType { panic("not implemented") }
 
 func (h *histogramIterator) At() (int64, float64) { panic("not implemented") }
 

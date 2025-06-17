@@ -11,11 +11,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build !slicelabels && !dedupelabels
+//go:build stringlabels
 
 package labels
 
 import (
+	"reflect"
 	"slices"
 	"strings"
 	"unsafe"
@@ -24,25 +25,31 @@ import (
 )
 
 // Labels is implemented by a single flat string holding name/value pairs.
-// Each name and value is preceded by its length, encoded as a single byte
-// for size 0-254, or the following 3 bytes little-endian, if the first byte is 255.
-// Maximum length allowed is 2^24 or 16MB.
+// Each name and value is preceded by its length in varint encoding.
 // Names are in order.
 type Labels struct {
 	data string
 }
 
 func decodeSize(data string, index int) (int, int) {
+	// Fast-path for common case of a single byte, value 0..127.
 	b := data[index]
 	index++
-	if b == 255 {
-		// Larger numbers are encoded as 3 bytes little-endian.
+	if b < 0x80 {
+		return int(b), index
+	}
+	size := int(b & 0x7F)
+	for shift := uint(7); ; shift += 7 {
 		// Just panic if we go of the end of data, since all Labels strings are constructed internally and
 		// malformed data indicates a bug, or memory corruption.
-		return int(data[index]) + (int(data[index+1]) << 8) + (int(data[index+2]) << 16), index + 3
+		b := data[index]
+		index++
+		size |= int(b&0x7F) << shift
+		if b < 0x80 {
+			break
+		}
 	}
-	// More common case of a single byte, value 0..254.
-	return int(b), index
+	return size, index
 }
 
 func decodeString(data string, index int) (string, int) {
@@ -51,8 +58,8 @@ func decodeString(data string, index int) (string, int) {
 	return data[index : index+size], index + size
 }
 
-// Bytes returns an opaque, not-human-readable, encoding of ls, usable as a map key.
-// Encoding may change over time or between runs of Prometheus.
+// Bytes returns ls as a byte slice.
+// It uses non-printing characters and so should not be used for printing.
 func (ls Labels) Bytes(buf []byte) []byte {
 	if cap(buf) < len(ls.data) {
 		buf = make([]byte, len(ls.data))
@@ -70,7 +77,7 @@ func (ls Labels) IsZero() bool {
 
 // MatchLabels returns a subset of Labels that matches/does not match with the provided label names based on the 'on' boolean.
 // If on is set to true, it returns the subset of labels that match with the provided label names and its inverse when 'on' is set to false.
-// TODO: This is only used in printing an error message.
+// TODO: This is only used in printing an error message
 func (ls Labels) MatchLabels(on bool, names ...string) Labels {
 	b := NewBuilder(ls)
 	if on {
@@ -292,9 +299,10 @@ func Equal(ls, o Labels) bool {
 func EmptyLabels() Labels {
 	return Labels{}
 }
-
-func yoloBytes(s string) []byte {
-	return unsafe.Slice(unsafe.StringData(s), len(s))
+func yoloBytes(s string) (b []byte) {
+	*(*string)(unsafe.Pointer(&b)) = s
+	(*reflect.SliceHeader)(unsafe.Pointer(&b)).Cap = len(s)
+	return
 }
 
 // New returns a sorted Labels from the given labels.
@@ -330,8 +338,8 @@ func Compare(a, b Labels) int {
 	}
 	i := 0
 	// First, go 8 bytes at a time. Data strings are expected to be 8-byte aligned.
-	sp := unsafe.Pointer(unsafe.StringData(shorter))
-	lp := unsafe.Pointer(unsafe.StringData(longer))
+	sp := unsafe.Pointer((*reflect.StringHeader)(unsafe.Pointer(&shorter)).Data)
+	lp := unsafe.Pointer((*reflect.StringHeader)(unsafe.Pointer(&longer)).Data)
 	for ; i < len(shorter)-8; i += 8 {
 		if *(*uint64)(unsafe.Add(sp, i)) != *(*uint64)(unsafe.Add(lp, i)) {
 			break
@@ -365,7 +373,7 @@ func Compare(a, b Labels) int {
 	return +1
 }
 
-// CopyFrom will copy labels from b on top of whatever was in ls previously, reusing memory or expanding if needed.
+// Copy labels from b on top of whatever was in ls previously, reusing memory or expanding if needed.
 func (ls *Labels) CopyFrom(b Labels) {
 	ls.data = b.data // strings are immutable
 }
@@ -435,11 +443,11 @@ func (ls Labels) DropMetricName() Labels {
 }
 
 // InternStrings is a no-op because it would only save when the whole set of labels is identical.
-func (ls *Labels) InternStrings(_ func(string) string) {
+func (ls *Labels) InternStrings(intern func(string) string) {
 }
 
 // ReleaseStrings is a no-op for the same reason as InternStrings.
-func (ls Labels) ReleaseStrings(_ func(string)) {
+func (ls Labels) ReleaseStrings(release func(string)) {
 }
 
 // Builder allows modifying Labels.
@@ -522,27 +530,48 @@ func marshalLabelToSizedBuffer(m *Label, data []byte) int {
 	return len(data) - i
 }
 
-func sizeWhenEncoded(x uint64) (n int) {
-	if x < 255 {
+func sizeVarint(x uint64) (n int) {
+	// Most common case first
+	if x < 1<<7 {
 		return 1
-	} else if x <= 1<<24 {
-		return 4
 	}
-	panic("String too long to encode as label.")
+	if x >= 1<<56 {
+		return 9
+	}
+	if x >= 1<<28 {
+		x >>= 28
+		n = 4
+	}
+	if x >= 1<<14 {
+		x >>= 14
+		n += 2
+	}
+	if x >= 1<<7 {
+		n++
+	}
+	return n + 1
 }
 
+func encodeVarint(data []byte, offset int, v uint64) int {
+	offset -= sizeVarint(v)
+	base := offset
+	for v >= 1<<7 {
+		data[offset] = uint8(v&0x7f | 0x80)
+		v >>= 7
+		offset++
+	}
+	data[offset] = uint8(v)
+	return base
+}
+
+// Special code for the common case that a size is less than 128
 func encodeSize(data []byte, offset, v int) int {
-	if v < 255 {
+	if v < 1<<7 {
 		offset--
 		data[offset] = uint8(v)
 		return offset
 	}
-	offset -= 4
-	data[offset] = 255
-	data[offset+1] = byte(v)
-	data[offset+2] = byte((v >> 8))
-	data[offset+3] = byte((v >> 16))
-	return offset
+	return encodeVarint(data, offset, uint64(v))
 }
 
 func labelsSize(lbls []Label) (n int) {
@@ -556,9 +585,9 @@ func labelsSize(lbls []Label) (n int) {
 func labelSize(m *Label) (n int) {
 	// strings are encoded as length followed by contents.
 	l := len(m.Name)
-	n += l + sizeWhenEncoded(uint64(l))
+	n += l + sizeVarint(uint64(l))
 	l = len(m.Value)
-	n += l + sizeWhenEncoded(uint64(l))
+	n += l + sizeVarint(uint64(l))
 	return n
 }
 
@@ -604,7 +633,7 @@ func (b *ScratchBuilder) Add(name, value string) {
 	b.add = append(b.add, Label{Name: name, Value: value})
 }
 
-// UnsafeAddBytes adds a name/value pair using []byte instead of string to reduce memory allocations.
+// Add a name/value pair, using []byte instead of string to reduce memory allocations.
 // The values must remain live until Labels() is called.
 func (b *ScratchBuilder) UnsafeAddBytes(name, value []byte) {
 	b.add = append(b.add, Label{Name: yoloString(name), Value: yoloString(value)})
@@ -632,7 +661,7 @@ func (b *ScratchBuilder) Labels() Labels {
 	return b.output
 }
 
-// Overwrite will write the newly-built Labels out to ls, reusing an internal buffer.
+// Write the newly-built Labels out to ls, reusing an internal buffer.
 // Callers must ensure that there are no other references to ls, or any strings fetched from it.
 func (b *ScratchBuilder) Overwrite(ls *Labels) {
 	size := labelsSize(b.add)
@@ -645,7 +674,7 @@ func (b *ScratchBuilder) Overwrite(ls *Labels) {
 	ls.data = yoloString(b.overwriteBuffer)
 }
 
-// SymbolTable is no-op, just for api parity with dedupelabels.
+// Symbol-table is no-op, just for api parity with dedupelabels.
 type SymbolTable struct{}
 
 func NewSymbolTable() *SymbolTable { return nil }
@@ -664,9 +693,4 @@ func NewScratchBuilderWithSymbolTable(_ *SymbolTable, n int) ScratchBuilder {
 
 func (b *ScratchBuilder) SetSymbolTable(_ *SymbolTable) {
 	// no-op
-}
-
-// SizeOfLabels returns the approximate space required for n copies of a label.
-func SizeOfLabels(name, value string, n uint64) uint64 {
-	return uint64(labelSize(&Label{Name: name, Value: value})) * n
 }

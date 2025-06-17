@@ -17,13 +17,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log/slog"
 	"math"
 	"path/filepath"
 	"sync"
 	"time"
 	"unicode/utf8"
 
+	"github.com/go-kit/log"
+	"github.com/go-kit/log/level"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/common/model"
 	"go.uber.org/atomic"
@@ -41,7 +42,6 @@ import (
 	"github.com/prometheus/prometheus/tsdb/record"
 	"github.com/prometheus/prometheus/tsdb/tsdbutil"
 	"github.com/prometheus/prometheus/tsdb/wlog"
-	"github.com/prometheus/prometheus/util/compression"
 	"github.com/prometheus/prometheus/util/zeropool"
 )
 
@@ -67,7 +67,7 @@ type Options struct {
 	WALSegmentSize int
 
 	// WALCompression configures the compression type to use on records in the WAL.
-	WALCompression compression.Type
+	WALCompression wlog.CompressionType
 
 	// StripeSize is the size (power of 2) in entries of the series hash map. Reducing the size will save memory but impact performance.
 	StripeSize int
@@ -91,7 +91,7 @@ type Options struct {
 func DefaultOptions() *Options {
 	return &Options{
 		WALSegmentSize:       wlog.DefaultSegmentSize,
-		WALCompression:       compression.None,
+		WALCompression:       wlog.CompressionNone,
 		StripeSize:           tsdb.DefaultStripeSize,
 		TruncateFrequency:    DefaultTruncateFrequency,
 		MinWALTime:           DefaultMinWALTime,
@@ -226,7 +226,7 @@ func (m *dbMetrics) Unregister() {
 // DB represents a WAL-only storage. It implements storage.DB.
 type DB struct {
 	mtx    sync.RWMutex
-	logger *slog.Logger
+	logger log.Logger
 	opts   *Options
 	rs     *remote.Storage
 
@@ -235,13 +235,6 @@ type DB struct {
 
 	appenderPool sync.Pool
 	bufPool      sync.Pool
-
-	// These pools are only used during WAL replay and are reset at the end.
-	// NOTE: Adjust resetWALReplayResources() upon changes to the pools.
-	walReplaySeriesPool          zeropool.Pool[[]record.RefSeries]
-	walReplaySamplesPool         zeropool.Pool[[]record.RefSample]
-	walReplayHistogramsPool      zeropool.Pool[[]record.RefHistogramSample]
-	walReplayFloatHistogramsPool zeropool.Pool[[]record.RefFloatHistogramSample]
 
 	nextRef *atomic.Uint64
 	series  *stripeSeries
@@ -258,7 +251,7 @@ type DB struct {
 }
 
 // Open returns a new agent.DB in the given directory.
-func Open(l *slog.Logger, reg prometheus.Registerer, rs *remote.Storage, dir string, opts *Options) (*DB, error) {
+func Open(l log.Logger, reg prometheus.Registerer, rs *remote.Storage, dir string, opts *Options) (*DB, error) {
 	opts = validateOptions(opts)
 
 	locker, err := tsdbutil.NewDirLocker(dir, "agent", l, reg)
@@ -313,11 +306,11 @@ func Open(l *slog.Logger, reg prometheus.Registerer, rs *remote.Storage, dir str
 	}
 
 	if err := db.replayWAL(); err != nil {
-		db.logger.Warn("encountered WAL read error, attempting repair", "err", err)
+		level.Warn(db.logger).Log("msg", "encountered WAL read error, attempting repair", "err", err)
 		if err := w.Repair(err); err != nil {
 			return nil, fmt.Errorf("repair corrupted WAL: %w", err)
 		}
-		db.logger.Info("successfully repaired WAL")
+		level.Info(db.logger).Log("msg", "successfully repaired WAL")
 	}
 
 	go db.run()
@@ -339,10 +332,10 @@ func validateOptions(opts *Options) *Options {
 	}
 
 	if opts.WALCompression == "" {
-		opts.WALCompression = compression.None
+		opts.WALCompression = wlog.CompressionNone
 	}
 
-	// Revert StripeSize to DefaultStripeSize if StripeSize is either 0 or not a power of 2.
+	// Revert Stripesize to DefaultStripsize if Stripsize is either 0 or not a power of 2.
 	if opts.StripeSize <= 0 || ((opts.StripeSize & (opts.StripeSize - 1)) != 0) {
 		opts.StripeSize = tsdb.DefaultStripeSize
 	}
@@ -366,8 +359,7 @@ func validateOptions(opts *Options) *Options {
 }
 
 func (db *DB) replayWAL() error {
-	db.logger.Info("replaying WAL, this may take a while", "dir", db.wal.Dir())
-	defer db.resetWALReplayResources()
+	level.Info(db.logger).Log("msg", "replaying WAL, this may take a while", "dir", db.wal.Dir())
 	start := time.Now()
 
 	dir, startFrom, err := wlog.LastCheckpoint(db.wal.Dir())
@@ -384,7 +376,7 @@ func (db *DB) replayWAL() error {
 		}
 		defer func() {
 			if err := sr.Close(); err != nil {
-				db.logger.Warn("error while closing the wal segments reader", "err", err)
+				level.Warn(db.logger).Log("msg", "error while closing the wal segments reader", "err", err)
 			}
 		}()
 
@@ -394,7 +386,7 @@ func (db *DB) replayWAL() error {
 			return fmt.Errorf("backfill checkpoint: %w", err)
 		}
 		startFrom++
-		db.logger.Info("WAL checkpoint loaded")
+		level.Info(db.logger).Log("msg", "WAL checkpoint loaded")
 	}
 
 	// Find the last segment.
@@ -403,7 +395,7 @@ func (db *DB) replayWAL() error {
 		return fmt.Errorf("finding WAL segments: %w", err)
 	}
 
-	// Backfill segments from the most recent checkpoint onwards.
+	// Backfil segments from the most recent checkpoint onwards.
 	for i := startFrom; i <= last; i++ {
 		seg, err := wlog.OpenReadSegment(wlog.SegmentName(db.wal.Dir(), i))
 		if err != nil {
@@ -413,25 +405,18 @@ func (db *DB) replayWAL() error {
 		sr := wlog.NewSegmentBufReader(seg)
 		err = db.loadWAL(wlog.NewReader(sr), multiRef)
 		if err := sr.Close(); err != nil {
-			db.logger.Warn("error while closing the wal segments reader", "err", err)
+			level.Warn(db.logger).Log("msg", "error while closing the wal segments reader", "err", err)
 		}
 		if err != nil {
 			return err
 		}
-		db.logger.Info("WAL segment loaded", "segment", i, "maxSegment", last)
+		level.Info(db.logger).Log("msg", "WAL segment loaded", "segment", i, "maxSegment", last)
 	}
 
 	walReplayDuration := time.Since(start)
 	db.metrics.walTotalReplayDuration.Set(walReplayDuration.Seconds())
 
 	return nil
-}
-
-func (db *DB) resetWALReplayResources() {
-	db.walReplaySeriesPool = zeropool.Pool[[]record.RefSeries]{}
-	db.walReplaySamplesPool = zeropool.Pool[[]record.RefSample]{}
-	db.walReplayHistogramsPool = zeropool.Pool[[]record.RefHistogramSample]{}
-	db.walReplayFloatHistogramsPool = zeropool.Pool[[]record.RefFloatHistogramSample]{}
 }
 
 func (db *DB) loadWAL(r *wlog.Reader, multiRef map[chunks.HeadSeriesRef]chunks.HeadSeriesRef) (err error) {
@@ -442,6 +427,11 @@ func (db *DB) loadWAL(r *wlog.Reader, multiRef map[chunks.HeadSeriesRef]chunks.H
 
 		decoded = make(chan interface{}, 10)
 		errCh   = make(chan error, 1)
+
+		seriesPool          zeropool.Pool[[]record.RefSeries]
+		samplesPool         zeropool.Pool[[]record.RefSample]
+		histogramsPool      zeropool.Pool[[]record.RefHistogramSample]
+		floatHistogramsPool zeropool.Pool[[]record.RefFloatHistogramSample]
 	)
 
 	go func() {
@@ -451,7 +441,7 @@ func (db *DB) loadWAL(r *wlog.Reader, multiRef map[chunks.HeadSeriesRef]chunks.H
 			rec := r.Record()
 			switch dec.Type(rec) {
 			case record.Series:
-				series := db.walReplaySeriesPool.Get()[:0]
+				series := seriesPool.Get()[:0]
 				series, err = dec.Series(rec, series)
 				if err != nil {
 					errCh <- &wlog.CorruptionErr{
@@ -463,7 +453,7 @@ func (db *DB) loadWAL(r *wlog.Reader, multiRef map[chunks.HeadSeriesRef]chunks.H
 				}
 				decoded <- series
 			case record.Samples:
-				samples := db.walReplaySamplesPool.Get()[:0]
+				samples := samplesPool.Get()[:0]
 				samples, err = dec.Samples(rec, samples)
 				if err != nil {
 					errCh <- &wlog.CorruptionErr{
@@ -474,8 +464,8 @@ func (db *DB) loadWAL(r *wlog.Reader, multiRef map[chunks.HeadSeriesRef]chunks.H
 					return
 				}
 				decoded <- samples
-			case record.HistogramSamples, record.CustomBucketsHistogramSamples:
-				histograms := db.walReplayHistogramsPool.Get()[:0]
+			case record.HistogramSamples:
+				histograms := histogramsPool.Get()[:0]
 				histograms, err = dec.HistogramSamples(rec, histograms)
 				if err != nil {
 					errCh <- &wlog.CorruptionErr{
@@ -486,8 +476,8 @@ func (db *DB) loadWAL(r *wlog.Reader, multiRef map[chunks.HeadSeriesRef]chunks.H
 					return
 				}
 				decoded <- histograms
-			case record.FloatHistogramSamples, record.CustomBucketsFloatHistogramSamples:
-				floatHistograms := db.walReplayFloatHistogramsPool.Get()[:0]
+			case record.FloatHistogramSamples:
+				floatHistograms := floatHistogramsPool.Get()[:0]
 				floatHistograms, err = dec.FloatHistogramSamples(rec, floatHistograms)
 				if err != nil {
 					errCh <- &wlog.CorruptionErr{
@@ -532,7 +522,7 @@ func (db *DB) loadWAL(r *wlog.Reader, multiRef map[chunks.HeadSeriesRef]chunks.H
 					}
 				}
 			}
-			db.walReplaySeriesPool.Put(v)
+			seriesPool.Put(v)
 		case []record.RefSample:
 			for _, entry := range v {
 				// Update the lastTs for the series based
@@ -546,7 +536,7 @@ func (db *DB) loadWAL(r *wlog.Reader, multiRef map[chunks.HeadSeriesRef]chunks.H
 					series.lastTs = entry.T
 				}
 			}
-			db.walReplaySamplesPool.Put(v)
+			samplesPool.Put(v)
 		case []record.RefHistogramSample:
 			for _, entry := range v {
 				// Update the lastTs for the series based
@@ -560,7 +550,7 @@ func (db *DB) loadWAL(r *wlog.Reader, multiRef map[chunks.HeadSeriesRef]chunks.H
 					series.lastTs = entry.T
 				}
 			}
-			db.walReplayHistogramsPool.Put(v)
+			histogramsPool.Put(v)
 		case []record.RefFloatHistogramSample:
 			for _, entry := range v {
 				// Update the lastTs for the series based
@@ -574,14 +564,14 @@ func (db *DB) loadWAL(r *wlog.Reader, multiRef map[chunks.HeadSeriesRef]chunks.H
 					series.lastTs = entry.T
 				}
 			}
-			db.walReplayFloatHistogramsPool.Put(v)
+			floatHistogramsPool.Put(v)
 		default:
 			panic(fmt.Errorf("unexpected decoded type: %T", d))
 		}
 	}
 
 	if v := nonExistentSeriesRefs.Load(); v > 0 {
-		db.logger.Warn("found sample referencing non-existing series", "skipped_series", v)
+		level.Warn(db.logger).Log("msg", "found sample referencing non-existing series", "skipped_series", v)
 	}
 
 	db.nextRef.Store(uint64(lastRef))
@@ -626,25 +616,12 @@ Loop:
 				ts = maxTS
 			}
 
-			db.logger.Debug("truncating the WAL", "ts", ts)
+			level.Debug(db.logger).Log("msg", "truncating the WAL", "ts", ts)
 			if err := db.truncate(ts); err != nil {
-				db.logger.Warn("failed to truncate WAL", "err", err)
+				level.Warn(db.logger).Log("msg", "failed to truncate WAL", "err", err)
 			}
 		}
 	}
-}
-
-// keepSeriesInWALCheckpoint is used to determine whether a series record should be kept in the checkpoint
-// last is the last WAL segment that was considered for checkpointing.
-func (db *DB) keepSeriesInWALCheckpoint(id chunks.HeadSeriesRef, last int) bool {
-	// Keep the record if the series exists in the db.
-	if db.series.GetByID(id) != nil {
-		return true
-	}
-
-	// Keep the record if the series was recently deleted.
-	seg, ok := db.deleted[id]
-	return ok && seg > last
 }
 
 func (db *DB) truncate(mint int64) error {
@@ -654,7 +631,7 @@ func (db *DB) truncate(mint int64) error {
 	start := time.Now()
 
 	db.gc(mint)
-	db.logger.Info("series GC completed", "duration", time.Since(start))
+	level.Info(db.logger).Log("msg", "series GC completed", "duration", time.Since(start))
 
 	first, last, err := wlog.Segments(db.wal.Dir())
 	if err != nil {
@@ -679,9 +656,18 @@ func (db *DB) truncate(mint int64) error {
 		return nil
 	}
 
+	keep := func(id chunks.HeadSeriesRef) bool {
+		if db.series.GetByID(id) != nil {
+			return true
+		}
+
+		seg, ok := db.deleted[id]
+		return ok && seg > last
+	}
+
 	db.metrics.checkpointCreationTotal.Inc()
 
-	if _, err = wlog.Checkpoint(db.logger, db.wal, first, last, db.keepSeriesInWALCheckpoint, mint); err != nil {
+	if _, err = wlog.Checkpoint(db.logger, db.wal, first, last, keep, mint); err != nil {
 		db.metrics.checkpointCreationFail.Inc()
 		var cerr *wlog.CorruptionErr
 		if errors.As(err, &cerr) {
@@ -693,7 +679,7 @@ func (db *DB) truncate(mint int64) error {
 		// If truncating fails, we'll just try it again at the next checkpoint.
 		// Leftover segments will still just be ignored in the future if there's a
 		// checkpoint that supersedes them.
-		db.logger.Error("truncating segments failed", "err", err)
+		level.Error(db.logger).Log("msg", "truncating segments failed", "err", err)
 	}
 
 	// The checkpoint is written and segments before it are truncated, so we
@@ -710,13 +696,13 @@ func (db *DB) truncate(mint int64) error {
 		// Leftover old checkpoints do not cause problems down the line beyond
 		// occupying disk space. They will just be ignored since a newer checkpoint
 		// exists.
-		db.logger.Error("delete old checkpoints", "err", err)
+		level.Error(db.logger).Log("msg", "delete old checkpoints", "err", err)
 		db.metrics.checkpointDeleteFail.Inc()
 	}
 
 	db.metrics.walTruncateDuration.Observe(time.Since(start).Seconds())
 
-	db.logger.Info("WAL checkpoint complete", "first", first, "last", last, "duration", time.Since(start))
+	level.Info(db.logger).Log("msg", "WAL checkpoint complete", "first", first, "last", last, "duration", time.Since(start))
 	return nil
 }
 
@@ -778,7 +764,6 @@ func (db *DB) Close() error {
 
 type appender struct {
 	*DB
-	hints *storage.AppendOptions
 
 	pendingSeries          []record.RefSeries
 	pendingSamples         []record.RefSample
@@ -797,10 +782,6 @@ type appender struct {
 	// Pointers to the series referenced by each element of pendingFloatHistograms.
 	// Series lock is not held on elements.
 	floatHistogramSeries []*memSeries
-}
-
-func (a *appender) SetOptions(opts *storage.AppendOptions) {
-	a.hints = opts
 }
 
 func (a *appender) Append(ref storage.SeriesRef, l labels.Labels, t int64, v float64) (storage.SeriesRef, error) {
@@ -996,132 +977,9 @@ func (a *appender) UpdateMetadata(storage.SeriesRef, labels.Labels, metadata.Met
 	return 0, nil
 }
 
-func (a *appender) AppendHistogramCTZeroSample(ref storage.SeriesRef, l labels.Labels, t, ct int64, h *histogram.Histogram, fh *histogram.FloatHistogram) (storage.SeriesRef, error) {
-	if h != nil {
-		if err := h.Validate(); err != nil {
-			return 0, err
-		}
-	}
-	if fh != nil {
-		if err := fh.Validate(); err != nil {
-			return 0, err
-		}
-	}
-	if ct >= t {
-		return 0, storage.ErrCTNewerThanSample
-	}
-
-	series := a.series.GetByID(chunks.HeadSeriesRef(ref))
-	if series == nil {
-		// Ensure no empty labels have gotten through.
-		l = l.WithoutEmpty()
-		if l.IsEmpty() {
-			return 0, fmt.Errorf("empty labelset: %w", tsdb.ErrInvalidSample)
-		}
-
-		if lbl, dup := l.HasDuplicateLabelNames(); dup {
-			return 0, fmt.Errorf(`label name "%s" is not unique: %w`, lbl, tsdb.ErrInvalidSample)
-		}
-
-		var created bool
-		series, created = a.getOrCreate(l)
-		if created {
-			a.pendingSeries = append(a.pendingSeries, record.RefSeries{
-				Ref:    series.ref,
-				Labels: l,
-			})
-			a.metrics.numActiveSeries.Inc()
-		}
-	}
-
-	series.Lock()
-	defer series.Unlock()
-
-	if ct <= a.minValidTime(series.lastTs) {
-		return 0, storage.ErrOutOfOrderCT
-	}
-
-	if ct <= series.lastTs {
-		// discard the sample if it's out of order.
-		return 0, storage.ErrOutOfOrderCT
-	}
-	series.lastTs = ct
-
-	switch {
-	case h != nil:
-		zeroHistogram := &histogram.Histogram{}
-		a.pendingHistograms = append(a.pendingHistograms, record.RefHistogramSample{
-			Ref: series.ref,
-			T:   ct,
-			H:   zeroHistogram,
-		})
-		a.histogramSeries = append(a.histogramSeries, series)
-	case fh != nil:
-		a.pendingFloatHistograms = append(a.pendingFloatHistograms, record.RefFloatHistogramSample{
-			Ref: series.ref,
-			T:   ct,
-			FH:  &histogram.FloatHistogram{},
-		})
-		a.floatHistogramSeries = append(a.floatHistogramSeries, series)
-	}
-
-	a.metrics.totalAppendedSamples.WithLabelValues(sampleMetricTypeHistogram).Inc()
-	return storage.SeriesRef(series.ref), nil
-}
-
-func (a *appender) AppendCTZeroSample(ref storage.SeriesRef, l labels.Labels, t, ct int64) (storage.SeriesRef, error) {
-	if ct >= t {
-		return 0, storage.ErrCTNewerThanSample
-	}
-
-	series := a.series.GetByID(chunks.HeadSeriesRef(ref))
-	if series == nil {
-		l = l.WithoutEmpty()
-		if l.IsEmpty() {
-			return 0, fmt.Errorf("empty labelset: %w", tsdb.ErrInvalidSample)
-		}
-
-		if lbl, dup := l.HasDuplicateLabelNames(); dup {
-			return 0, fmt.Errorf(`label name "%s" is not unique: %w`, lbl, tsdb.ErrInvalidSample)
-		}
-
-		newSeries, created := a.getOrCreate(l)
-		if created {
-			a.pendingSeries = append(a.pendingSeries, record.RefSeries{
-				Ref:    newSeries.ref,
-				Labels: l,
-			})
-			a.metrics.numActiveSeries.Inc()
-		}
-
-		series = newSeries
-	}
-
-	series.Lock()
-	defer series.Unlock()
-
-	if t <= a.minValidTime(series.lastTs) {
-		a.metrics.totalOutOfOrderSamples.Inc()
-		return 0, storage.ErrOutOfOrderSample
-	}
-
-	if ct <= series.lastTs {
-		// discard the sample if it's out of order.
-		return 0, storage.ErrOutOfOrderCT
-	}
-	series.lastTs = ct
-
-	// NOTE: always modify pendingSamples and sampleSeries together.
-	a.pendingSamples = append(a.pendingSamples, record.RefSample{
-		Ref: series.ref,
-		T:   ct,
-		V:   0,
-	})
-	a.sampleSeries = append(a.sampleSeries, series)
-
-	a.metrics.totalAppendedSamples.WithLabelValues(sampleMetricTypeFloat).Inc()
-
-	return storage.SeriesRef(series.ref), nil
+func (a *appender) AppendCTZeroSample(storage.SeriesRef, labels.Labels, int64, int64) (storage.SeriesRef, error) {
+	// TODO(bwplotka): Wire metadata in the Agent's appender.
+	return 0, nil
 }
 
 // Commit submits the collected samples and purges the batch.
@@ -1167,39 +1025,19 @@ func (a *appender) log() error {
 	}
 
 	if len(a.pendingHistograms) > 0 {
-		var customBucketsHistograms []record.RefHistogramSample
-		buf, customBucketsHistograms = encoder.HistogramSamples(a.pendingHistograms, buf)
-		if len(buf) > 0 {
-			if err := a.wal.Log(buf); err != nil {
-				return err
-			}
-			buf = buf[:0]
+		buf = encoder.HistogramSamples(a.pendingHistograms, buf)
+		if err := a.wal.Log(buf); err != nil {
+			return err
 		}
-		if len(customBucketsHistograms) > 0 {
-			buf = encoder.CustomBucketsHistogramSamples(customBucketsHistograms, nil)
-			if err := a.wal.Log(buf); err != nil {
-				return err
-			}
-			buf = buf[:0]
-		}
+		buf = buf[:0]
 	}
 
 	if len(a.pendingFloatHistograms) > 0 {
-		var customBucketsFloatHistograms []record.RefFloatHistogramSample
-		buf, customBucketsFloatHistograms = encoder.FloatHistogramSamples(a.pendingFloatHistograms, buf)
-		if len(buf) > 0 {
-			if err := a.wal.Log(buf); err != nil {
-				return err
-			}
-			buf = buf[:0]
+		buf = encoder.FloatHistogramSamples(a.pendingFloatHistograms, buf)
+		if err := a.wal.Log(buf); err != nil {
+			return err
 		}
-		if len(customBucketsFloatHistograms) > 0 {
-			buf = encoder.CustomBucketsFloatHistogramSamples(customBucketsFloatHistograms, nil)
-			if err := a.wal.Log(buf); err != nil {
-				return err
-			}
-			buf = buf[:0]
-		}
+		buf = buf[:0]
 	}
 
 	if len(a.pendingExamplars) > 0 {

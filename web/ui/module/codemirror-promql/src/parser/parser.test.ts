@@ -528,7 +528,7 @@ describe('promql operations', () => {
         },
       ],
     },
-    // test aggregation
+    // test aggregration
     {
       expr: 'sum by (foo)(some_metric)',
       expectedValueType: ValueType.vector,
@@ -959,7 +959,7 @@ describe('promql operations', () => {
       ],
     },
     {
-      expr: `{'foo\`metric':'bar'}`,
+      expr: `{'foo\`metric':'bar'}`, // eslint-disable-line
       expectedValueType: ValueType.vector,
       expectedDiag: [],
     },

@@ -41,13 +41,12 @@ function createMatcher(labelMatcher: SyntaxNode, state: EditorState): Matcher {
           case QuotedLabelName:
             matcher.name = state.sliceDoc(cursor.from, cursor.to).slice(1, -1);
             break;
-          case MatchOp: {
+          case MatchOp:
             const ope = cursor.node.firstChild;
             if (ope) {
               matcher.type = ope.type.id;
             }
             break;
-          }
           case StringLiteral:
             matcher.value = state.sliceDoc(cursor.from, cursor.to).slice(1, -1);
             break;
@@ -64,13 +63,12 @@ function createMatcher(labelMatcher: SyntaxNode, state: EditorState): Matcher {
           case LabelName:
             matcher.name = state.sliceDoc(cursor.from, cursor.to);
             break;
-          case MatchOp: {
+          case MatchOp:
             const ope = cursor.node.firstChild;
             if (ope) {
               matcher.type = ope.type.id;
             }
             break;
-          }
           case StringLiteral:
             matcher.value = state.sliceDoc(cursor.from, cursor.to).slice(1, -1);
             break;

@@ -32,7 +32,6 @@ import (
 )
 
 func TestGenerateBucket(t *testing.T) {
-	t.Parallel()
 	tcs := []struct {
 		min, max         int
 		start, end, step int

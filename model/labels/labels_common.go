@@ -51,11 +51,7 @@ func (ls Labels) String() string {
 			b.WriteByte(',')
 			b.WriteByte(' ')
 		}
-		if !model.LabelName(l.Name).IsValidLegacy() {
-			b.Write(strconv.AppendQuote(b.AvailableBuffer(), l.Name))
-		} else {
-			b.WriteString(l.Name)
-		}
+		b.WriteString(l.Name)
 		b.WriteByte('=')
 		b.Write(strconv.AppendQuote(b.AvailableBuffer(), l.Value))
 		i++
@@ -104,14 +100,14 @@ func (ls Labels) IsValid(validationScheme model.ValidationScheme) bool {
 		if l.Name == model.MetricNameLabel {
 			// If the default validation scheme has been overridden with legacy mode,
 			// we need to call the special legacy validation checker.
-			if validationScheme == model.LegacyValidation && !model.IsValidLegacyMetricName(string(model.LabelValue(l.Value))) {
+			if validationScheme == model.LegacyValidation && model.NameValidationScheme == model.UTF8Validation && !model.IsValidLegacyMetricName(string(model.LabelValue(l.Value))) {
 				return strconv.ErrSyntax
 			}
 			if !model.IsValidMetricName(model.LabelValue(l.Value)) {
 				return strconv.ErrSyntax
 			}
 		}
-		if validationScheme == model.LegacyValidation {
+		if validationScheme == model.LegacyValidation && model.NameValidationScheme == model.UTF8Validation {
 			if !model.LabelName(l.Name).IsValidLegacy() || !model.LabelValue(l.Value).IsValid() {
 				return strconv.ErrSyntax
 			}
@@ -167,8 +163,10 @@ func (b *Builder) Del(ns ...string) *Builder {
 // Keep removes all labels from the base except those with the given names.
 func (b *Builder) Keep(ns ...string) *Builder {
 	b.base.Range(func(l Label) {
-		if slices.Contains(ns, l.Name) {
-			return
+		for _, n := range ns {
+			if l.Name == n {
+				return
+			}
 		}
 		b.del = append(b.del, l.Name)
 	})
@@ -232,5 +230,5 @@ func contains(s []Label, n string) bool {
 }
 
 func yoloString(b []byte) string {
-	return unsafe.String(unsafe.SliceData(b), len(b))
+	return *((*string)(unsafe.Pointer(&b)))
 }

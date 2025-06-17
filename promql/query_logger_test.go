@@ -26,7 +26,7 @@ import (
 func TestQueryLogging(t *testing.T) {
 	fileAsBytes := make([]byte, 4096)
 	queryLogger := ActiveQueryTracker{
-		mmappedFile:  fileAsBytes,
+		mmapedFile:   fileAsBytes,
 		logger:       nil,
 		getNextIndex: make(chan int, 4),
 	}
@@ -70,7 +70,7 @@ func TestQueryLogging(t *testing.T) {
 func TestIndexReuse(t *testing.T) {
 	queryBytes := make([]byte, 1+3*entrySize)
 	queryLogger := ActiveQueryTracker{
-		mmappedFile:  queryBytes,
+		mmapedFile:   queryBytes,
 		logger:       nil,
 		getNextIndex: make(chan int, 3),
 	}
@@ -106,10 +106,10 @@ func TestIndexReuse(t *testing.T) {
 
 func TestMMapFile(t *testing.T) {
 	dir := t.TempDir()
-	fpath := filepath.Join(dir, "mmappedFile")
+	fpath := filepath.Join(dir, "mmapedFile")
 	const data = "ab"
 
-	fileAsBytes, closer, err := getMMappedFile(fpath, 2, nil)
+	fileAsBytes, closer, err := getMMapedFile(fpath, 2, nil)
 	require.NoError(t, err)
 	copy(fileAsBytes, data)
 	require.NoError(t, closer.Close())

@@ -93,7 +93,7 @@ func (c *sampleAndChunkQueryableClient) ChunkQuerier(mint, maxt int64) (storage.
 		noop bool
 		err  error
 	)
-	cq.maxt, noop, err = c.preferLocalStorage(mint, maxt)
+	cq.querier.maxt, noop, err = c.preferLocalStorage(mint, maxt)
 	if err != nil {
 		return nil, err
 	}

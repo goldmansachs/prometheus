@@ -140,8 +140,8 @@ func decodeString(t *nameTable, data string, index int) (string, int) {
 	return t.ToName(num), index
 }
 
-// Bytes returns an opaque, not-human-readable, encoding of ls, usable as a map key.
-// Encoding may change over time or between runs of Prometheus.
+// Bytes returns ls as a byte slice.
+// It uses non-printing characters and so should not be used for printing.
 func (ls Labels) Bytes(buf []byte) []byte {
 	b := bytes.NewBuffer(buf[:0])
 	for i := 0; i < len(ls.data); {
@@ -814,9 +814,4 @@ func (b *ScratchBuilder) Overwrite(ls *Labels) {
 	marshalNumbersToSizedBuffer(b.nums, b.overwriteBuffer)
 	ls.syms = b.syms.nameTable
 	ls.data = yoloString(b.overwriteBuffer)
-}
-
-// SizeOfLabels returns the approximate space required for n copies of a label.
-func SizeOfLabels(name, value string, n uint64) uint64 {
-	return uint64(len(name)+len(value)) + n*4 // Assuming most symbol-table entries are 2 bytes long.
 }

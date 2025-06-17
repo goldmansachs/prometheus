@@ -1,2 +1,0 @@
-otlp:
-  convert_histograms_to_nhcb: true

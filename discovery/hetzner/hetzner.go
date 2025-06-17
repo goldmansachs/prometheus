@@ -17,9 +17,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log/slog"
 	"time"
 
+	"github.com/go-kit/log"
 	"github.com/hetznercloud/hcloud-go/v2/hcloud"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/common/config"
@@ -59,15 +59,12 @@ type SDConfig struct {
 	RefreshInterval model.Duration `yaml:"refresh_interval"`
 	Port            int            `yaml:"port"`
 	Role            Role           `yaml:"role"`
-
-	LabelSelector string `yaml:"label_selector,omitempty"`
-
-	hcloudEndpoint string // For tests only.
-	robotEndpoint  string // For tests only.
+	hcloudEndpoint  string         // For tests only.
+	robotEndpoint   string         // For tests only.
 }
 
 // NewDiscovererMetrics implements discovery.Config.
-func (*SDConfig) NewDiscovererMetrics(_ prometheus.Registerer, rmi discovery.RefreshMetricsInstantiator) discovery.DiscovererMetrics {
+func (*SDConfig) NewDiscovererMetrics(reg prometheus.Registerer, rmi discovery.RefreshMetricsInstantiator) discovery.DiscovererMetrics {
 	return &hetznerMetrics{
 		refreshMetrics: rmi,
 	}
@@ -138,10 +135,10 @@ type Discovery struct {
 }
 
 // NewDiscovery returns a new Discovery which periodically refreshes its targets.
-func NewDiscovery(conf *SDConfig, logger *slog.Logger, metrics discovery.DiscovererMetrics) (*refresh.Discovery, error) {
+func NewDiscovery(conf *SDConfig, logger log.Logger, metrics discovery.DiscovererMetrics) (*refresh.Discovery, error) {
 	m, ok := metrics.(*hetznerMetrics)
 	if !ok {
-		return nil, errors.New("invalid discovery metrics type")
+		return nil, fmt.Errorf("invalid discovery metrics type")
 	}
 
 	r, err := newRefresher(conf, logger)
@@ -160,7 +157,7 @@ func NewDiscovery(conf *SDConfig, logger *slog.Logger, metrics discovery.Discove
 	), nil
 }
 
-func newRefresher(conf *SDConfig, l *slog.Logger) (refresher, error) {
+func newRefresher(conf *SDConfig, l log.Logger) (refresher, error) {
 	switch conf.Role {
 	case HetznerRoleHcloud:
 		if conf.hcloudEndpoint == "" {

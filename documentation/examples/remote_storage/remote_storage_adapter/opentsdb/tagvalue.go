@@ -78,7 +78,7 @@ func (tv TagValue) MarshalJSON() ([]byte, error) {
 		case b == ':':
 			result.WriteString("_.")
 		default:
-			fmt.Fprintf(result, "_%X", b)
+			result.WriteString(fmt.Sprintf("_%X", b))
 		}
 	}
 	result.WriteByte('"')

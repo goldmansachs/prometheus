@@ -118,7 +118,6 @@ func makeLoadBalancerService() *v1.Service {
 }
 
 func TestServiceDiscoveryAdd(t *testing.T) {
-	t.Parallel()
 	n, c := makeDiscovery(RoleService, NamespaceDiscovery{})
 
 	k8sDiscoveryTest{
@@ -190,7 +189,6 @@ func TestServiceDiscoveryAdd(t *testing.T) {
 }
 
 func TestServiceDiscoveryDelete(t *testing.T) {
-	t.Parallel()
 	n, c := makeDiscovery(RoleService, NamespaceDiscovery{}, makeService())
 
 	k8sDiscoveryTest{
@@ -209,7 +207,6 @@ func TestServiceDiscoveryDelete(t *testing.T) {
 }
 
 func TestServiceDiscoveryUpdate(t *testing.T) {
-	t.Parallel()
 	n, c := makeDiscovery(RoleService, NamespaceDiscovery{}, makeService())
 
 	k8sDiscoveryTest{
@@ -254,7 +251,6 @@ func TestServiceDiscoveryUpdate(t *testing.T) {
 }
 
 func TestServiceDiscoveryNamespaces(t *testing.T) {
-	t.Parallel()
 	n, c := makeDiscovery(RoleService, NamespaceDiscovery{Names: []string{"ns1", "ns2"}})
 
 	k8sDiscoveryTest{
@@ -307,7 +303,6 @@ func TestServiceDiscoveryNamespaces(t *testing.T) {
 }
 
 func TestServiceDiscoveryOwnNamespace(t *testing.T) {
-	t.Parallel()
 	n, c := makeDiscovery(RoleService, NamespaceDiscovery{IncludeOwnNamespace: true})
 
 	k8sDiscoveryTest{
@@ -343,7 +338,6 @@ func TestServiceDiscoveryOwnNamespace(t *testing.T) {
 }
 
 func TestServiceDiscoveryAllNamespaces(t *testing.T) {
-	t.Parallel()
 	n, c := makeDiscovery(RoleService, NamespaceDiscovery{})
 
 	k8sDiscoveryTest{

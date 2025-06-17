@@ -34,7 +34,6 @@ func TestStartupInterrupt(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping test in short mode.")
 	}
-	t.Parallel()
 
 	port := fmt.Sprintf(":%d", testutil.RandomUnprivilegedPort(t))
 

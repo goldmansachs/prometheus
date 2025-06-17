@@ -20,7 +20,9 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"testing"
+	"time"
 
+	influx "github.com/influxdata/influxdb/client/v2"
 	"github.com/prometheus/common/model"
 	"github.com/stretchr/testify/require"
 )
@@ -67,14 +69,13 @@ func TestClient(t *testing.T) {
 	}
 
 	expectedBody := `testmetric,test_label=test_label_value1 value=1.23 123456789123
-
 testmetric,test_label=test_label_value2 value=5.1234 123456789123
 `
 
 	server := httptest.NewServer(http.HandlerFunc(
-		func(_ http.ResponseWriter, r *http.Request) {
+		func(w http.ResponseWriter, r *http.Request) {
 			require.Equal(t, http.MethodPost, r.Method, "Unexpected method.")
-			require.Equal(t, "/api/v2/write", r.URL.Path, "Unexpected path.")
+			require.Equal(t, "/write", r.URL.Path, "Unexpected path.")
 			b, err := io.ReadAll(r.Body)
 			require.NoError(t, err, "Error reading body.")
 			require.Equal(t, expectedBody, string(b), "Unexpected request body.")
@@ -85,7 +86,13 @@ testmetric,test_label=test_label_value2 value=5.1234 123456789123
 	serverURL, err := url.Parse(server.URL)
 	require.NoError(t, err, "Unable to parse server URL.")
 
-	c := NewClient(nil, serverURL.String(), "auth_token", "test_organization", "test_bucket")
+	conf := influx.HTTPConfig{
+		Addr:     serverURL.String(),
+		Username: "testuser",
+		Password: "testpass",
+		Timeout:  time.Minute,
+	}
+	c := NewClient(nil, conf, "test_db", "default")
 	err = c.Write(samples)
 	require.NoError(t, err, "Error sending samples.")
 }

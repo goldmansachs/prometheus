@@ -246,7 +246,7 @@ func TestRecordingEvalWithOrigin(t *testing.T) {
 	require.NoError(t, err)
 
 	rule := NewRecordingRule(name, expr, lbs)
-	_, err = rule.Eval(ctx, 0, now, func(ctx context.Context, _ string, _ time.Time) (promql.Vector, error) {
+	_, err = rule.Eval(ctx, 0, now, func(ctx context.Context, qs string, _ time.Time) (promql.Vector, error) {
 		detail = FromOriginContext(ctx)
 		return nil, nil
 	}, nil, 0)
@@ -255,32 +255,24 @@ func TestRecordingEvalWithOrigin(t *testing.T) {
 	require.Equal(t, detail, NewRuleDetail(rule))
 }
 
-func TestRecordingRule_SetDependentRules(t *testing.T) {
-	dependentRule := NewRecordingRule("test1", nil, labels.EmptyLabels())
-
+func TestRecordingRule_SetNoDependentRules(t *testing.T) {
 	rule := NewRecordingRule("1", &parser.NumberLiteral{Val: 1}, labels.EmptyLabels())
 	require.False(t, rule.NoDependentRules())
 
-	rule.SetDependentRules([]Rule{dependentRule})
+	rule.SetNoDependentRules(false)
 	require.False(t, rule.NoDependentRules())
-	require.Equal(t, []Rule{dependentRule}, rule.DependentRules())
 
-	rule.SetDependentRules([]Rule{})
+	rule.SetNoDependentRules(true)
 	require.True(t, rule.NoDependentRules())
-	require.Empty(t, rule.DependentRules())
 }
 
-func TestRecordingRule_SetDependencyRules(t *testing.T) {
-	dependencyRule := NewRecordingRule("test1", nil, labels.EmptyLabels())
-
+func TestRecordingRule_SetNoDependencyRules(t *testing.T) {
 	rule := NewRecordingRule("1", &parser.NumberLiteral{Val: 1}, labels.EmptyLabels())
 	require.False(t, rule.NoDependencyRules())
 
-	rule.SetDependencyRules([]Rule{dependencyRule})
+	rule.SetNoDependencyRules(false)
 	require.False(t, rule.NoDependencyRules())
-	require.Equal(t, []Rule{dependencyRule}, rule.DependencyRules())
 
-	rule.SetDependencyRules([]Rule{})
+	rule.SetNoDependencyRules(true)
 	require.True(t, rule.NoDependencyRules())
-	require.Empty(t, rule.DependencyRules())
 }

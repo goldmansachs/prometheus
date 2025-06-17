@@ -29,11 +29,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/prometheus/common/promslog"
+	"github.com/go-kit/log"
 	"github.com/stretchr/testify/require"
 
 	tsdb_errors "github.com/prometheus/prometheus/tsdb/errors"
-	"github.com/prometheus/prometheus/util/compression"
+	"github.com/prometheus/prometheus/util/testutil"
 )
 
 type reader interface {
@@ -53,7 +53,7 @@ var readerConstructors = map[string]func(io.Reader) reader{
 		return NewReader(r)
 	},
 	"LiveReader": func(r io.Reader) reader {
-		lr := NewLiveReader(promslog.NewNopLogger(), NewLiveReaderMetrics(nil), r)
+		lr := NewLiveReader(log.NewNopLogger(), NewLiveReaderMetrics(nil), r)
 		lr.eofNonErr = true
 		return lr
 	},
@@ -196,7 +196,7 @@ func TestReader(t *testing.T) {
 }
 
 func TestReader_Live(t *testing.T) {
-	logger := promslog.NewNopLogger()
+	logger := testutil.NewLogger(t)
 
 	for i := range testReaderCases {
 		t.Run(strconv.Itoa(i), func(t *testing.T) {
@@ -315,7 +315,7 @@ func allSegments(dir string) (io.ReadCloser, error) {
 
 func TestReaderFuzz(t *testing.T) {
 	for name, fn := range readerConstructors {
-		for _, compress := range compression.Types() {
+		for _, compress := range []CompressionType{CompressionNone, CompressionSnappy, CompressionZstd} {
 			t.Run(fmt.Sprintf("%s,compress=%s", name, compress), func(t *testing.T) {
 				dir := t.TempDir()
 
@@ -353,8 +353,8 @@ func TestReaderFuzz(t *testing.T) {
 }
 
 func TestReaderFuzz_Live(t *testing.T) {
-	logger := promslog.NewNopLogger()
-	for _, compress := range compression.Types() {
+	logger := testutil.NewLogger(t)
+	for _, compress := range []CompressionType{CompressionNone, CompressionSnappy, CompressionZstd} {
 		t.Run(fmt.Sprintf("compress=%s", compress), func(t *testing.T) {
 			dir := t.TempDir()
 
@@ -441,10 +441,10 @@ func TestReaderFuzz_Live(t *testing.T) {
 func TestLiveReaderCorrupt_ShortFile(t *testing.T) {
 	// Write a corrupt WAL segment, there is one record of pageSize in length,
 	// but the segment is only half written.
-	logger := promslog.NewNopLogger()
+	logger := testutil.NewLogger(t)
 	dir := t.TempDir()
 
-	w, err := NewSize(nil, nil, dir, pageSize, compression.None)
+	w, err := NewSize(nil, nil, dir, pageSize, CompressionNone)
 	require.NoError(t, err)
 
 	rec := make([]byte, pageSize-recordHeaderSize)
@@ -481,10 +481,10 @@ func TestLiveReaderCorrupt_ShortFile(t *testing.T) {
 
 func TestLiveReaderCorrupt_RecordTooLongAndShort(t *testing.T) {
 	// Write a corrupt WAL segment, when record len > page size.
-	logger := promslog.NewNopLogger()
+	logger := testutil.NewLogger(t)
 	dir := t.TempDir()
 
-	w, err := NewSize(nil, nil, dir, pageSize*2, compression.None)
+	w, err := NewSize(nil, nil, dir, pageSize*2, CompressionNone)
 	require.NoError(t, err)
 
 	rec := make([]byte, pageSize-recordHeaderSize)
@@ -531,7 +531,7 @@ func TestReaderData(t *testing.T) {
 
 	for name, fn := range readerConstructors {
 		t.Run(name, func(t *testing.T) {
-			w, err := New(nil, nil, dir, compression.Snappy)
+			w, err := New(nil, nil, dir, CompressionSnappy)
 			require.NoError(t, err)
 
 			sr, err := allSegments(dir)

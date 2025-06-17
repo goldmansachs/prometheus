@@ -39,9 +39,6 @@ var parserPool = sync.Pool{
 	},
 }
 
-// ExperimentalDurationExpr is a flag to enable experimental duration expression parsing.
-var ExperimentalDurationExpr bool
-
 type Parser interface {
 	ParseExpr() (Expr, error)
 	Close()
@@ -75,7 +72,7 @@ func WithFunctions(functions map[string]*Function) Opt {
 }
 
 // NewParser returns a new parser.
-func NewParser(input string, opts ...Opt) *parser { //nolint:revive // unexported-return
+func NewParser(input string, opts ...Opt) *parser { //nolint:revive // unexported-return.
 	p := parserPool.Get().(*parser)
 
 	p.functions = Functions
@@ -247,8 +244,7 @@ type seriesDescription struct {
 	values []SequenceValue
 }
 
-// ParseSeriesDesc parses the description of a time series. It is only used in
-// the PromQL testing framework code.
+// ParseSeriesDesc parses the description of a time series.
 func ParseSeriesDesc(input string) (labels labels.Labels, values []SequenceValue, err error) {
 	p := NewParser(input)
 	p.lex.seriesDesc = true
@@ -451,8 +447,8 @@ func (p *parser) newAggregateExpr(op Item, modifier, args Node) (ret *AggregateE
 
 	desiredArgs := 1
 	if ret.Op.IsAggregatorWithParam() {
-		if !EnableExperimentalFunctions && ret.Op.IsExperimentalAggregator() {
-			p.addParseErrf(ret.PositionRange(), "%s() is experimental and must be enabled with --enable-feature=promql-experimental-functions", ret.Op)
+		if !EnableExperimentalFunctions && (ret.Op == LIMITK || ret.Op == LIMIT_RATIO) {
+			p.addParseErrf(ret.PositionRange(), "limitk() and limit_ratio() are experimental and must be enabled with --enable-feature=promql-experimental-functions")
 			return
 		}
 		desiredArgs = 2
@@ -884,6 +880,9 @@ func parseDuration(ds string) (time.Duration, error) {
 	if err != nil {
 		return 0, err
 	}
+	if dur == 0 {
+		return 0, errors.New("duration must be greater than 0")
+	}
 	return time.Duration(dur), nil
 }
 
@@ -939,13 +938,11 @@ func (p *parser) newMetricNameMatcher(value Item) *labels.Matcher {
 // addOffset is used to set the offset in the generated parser.
 func (p *parser) addOffset(e Node, offset time.Duration) {
 	var orgoffsetp *time.Duration
-	var orgoffsetexprp *DurationExpr
 	var endPosp *posrange.Pos
 
 	switch s := e.(type) {
 	case *VectorSelector:
 		orgoffsetp = &s.OriginalOffset
-		orgoffsetexprp = s.OriginalOffsetExpr
 		endPosp = &s.PosRange.End
 	case *MatrixSelector:
 		vs, ok := s.VectorSelector.(*VectorSelector)
@@ -954,11 +951,9 @@ func (p *parser) addOffset(e Node, offset time.Duration) {
 			return
 		}
 		orgoffsetp = &vs.OriginalOffset
-		orgoffsetexprp = vs.OriginalOffsetExpr
 		endPosp = &s.EndPos
 	case *SubqueryExpr:
 		orgoffsetp = &s.OriginalOffset
-		orgoffsetexprp = s.OriginalOffsetExpr
 		endPosp = &s.EndPos
 	default:
 		p.addParseErrf(e.PositionRange(), "offset modifier must be preceded by an instant vector selector or range vector selector or a subquery")
@@ -967,49 +962,10 @@ func (p *parser) addOffset(e Node, offset time.Duration) {
 
 	// it is already ensured by parseDuration func that there never will be a zero offset modifier
 	switch {
-	case *orgoffsetp != 0 || orgoffsetexprp != nil:
+	case *orgoffsetp != 0:
 		p.addParseErrf(e.PositionRange(), "offset may not be set multiple times")
 	case orgoffsetp != nil:
 		*orgoffsetp = offset
-	}
-
-	*endPosp = p.lastClosing
-}
-
-// addOffsetExpr is used to set the offset expression in the generated parser.
-func (p *parser) addOffsetExpr(e Node, expr *DurationExpr) {
-	var orgoffsetp *time.Duration
-	var orgoffsetexprp **DurationExpr
-	var endPosp *posrange.Pos
-
-	switch s := e.(type) {
-	case *VectorSelector:
-		orgoffsetp = &s.OriginalOffset
-		orgoffsetexprp = &s.OriginalOffsetExpr
-		endPosp = &s.PosRange.End
-	case *MatrixSelector:
-		vs, ok := s.VectorSelector.(*VectorSelector)
-		if !ok {
-			p.addParseErrf(e.PositionRange(), "ranges only allowed for vector selectors")
-			return
-		}
-		orgoffsetp = &vs.OriginalOffset
-		orgoffsetexprp = &vs.OriginalOffsetExpr
-		endPosp = &s.EndPos
-	case *SubqueryExpr:
-		orgoffsetp = &s.OriginalOffset
-		orgoffsetexprp = &s.OriginalOffsetExpr
-		endPosp = &s.EndPos
-	default:
-		p.addParseErrf(e.PositionRange(), "offset modifier must be preceded by an instant vector selector or range vector selector or a subquery")
-		return
-	}
-
-	switch {
-	case *orgoffsetp != 0 || *orgoffsetexprp != nil:
-		p.addParseErrf(e.PositionRange(), "offset may not be set multiple times")
-	case orgoffsetexprp != nil:
-		*orgoffsetexprp = expr
 	}
 
 	*endPosp = p.lastClosing
@@ -1086,12 +1042,6 @@ func (p *parser) getAtModifierVars(e Node) (**int64, *ItemType, *posrange.Pos, b
 	}
 
 	return timestampp, preprocp, endPosp, true
-}
-
-func (p *parser) experimentalDurationExpr(e Expr) {
-	if !ExperimentalDurationExpr {
-		p.addParseErrf(e.PositionRange(), "experimental duration expression is not enabled")
-	}
 }
 
 func MustLabelMatcher(mt labels.MatchType, name, val string) *labels.Matcher {

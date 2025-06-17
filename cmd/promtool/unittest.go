@@ -19,7 +19,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"math"
 	"os"
 	"path/filepath"
 	"sort"
@@ -27,12 +26,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/go-kit/log"
 	"github.com/google/go-cmp/cmp"
 	"github.com/grafana/regexp"
 	"github.com/nsf/jsondiff"
-	"github.com/prometheus/common/model"
-	"github.com/prometheus/common/promslog"
 	"gopkg.in/yaml.v2"
+
+	"github.com/prometheus/common/model"
 
 	"github.com/prometheus/prometheus/model/histogram"
 	"github.com/prometheus/prometheus/model/labels"
@@ -46,11 +46,11 @@ import (
 
 // RulesUnitTest does unit testing of rules based on the unit testing files provided.
 // More info about the file format can be found in the docs.
-func RulesUnitTest(queryOpts promqltest.LazyLoaderOpts, runStrings []string, diffFlag, debug, ignoreUnknownFields bool, files ...string) int {
-	return RulesUnitTestResult(io.Discard, queryOpts, runStrings, diffFlag, debug, ignoreUnknownFields, files...)
+func RulesUnitTest(queryOpts promqltest.LazyLoaderOpts, runStrings []string, diffFlag bool, files ...string) int {
+	return RulesUnitTestResult(io.Discard, queryOpts, runStrings, diffFlag, files...)
 }
 
-func RulesUnitTestResult(results io.Writer, queryOpts promqltest.LazyLoaderOpts, runStrings []string, diffFlag, debug, ignoreUnknownFields bool, files ...string) int {
+func RulesUnitTestResult(results io.Writer, queryOpts promqltest.LazyLoaderOpts, runStrings []string, diffFlag bool, files ...string) int {
 	failed := false
 	junit := &junitxml.JUnitXML{}
 
@@ -60,7 +60,7 @@ func RulesUnitTestResult(results io.Writer, queryOpts promqltest.LazyLoaderOpts,
 	}
 
 	for _, f := range files {
-		if errs := ruleUnitTest(f, queryOpts, run, diffFlag, debug, ignoreUnknownFields, junit.Suite(f)); errs != nil {
+		if errs := ruleUnitTest(f, queryOpts, run, diffFlag, junit.Suite(f)); errs != nil {
 			fmt.Fprintln(os.Stderr, "  FAILED:")
 			for _, e := range errs {
 				fmt.Fprintln(os.Stderr, e.Error())
@@ -82,7 +82,7 @@ func RulesUnitTestResult(results io.Writer, queryOpts promqltest.LazyLoaderOpts,
 	return successExitCode
 }
 
-func ruleUnitTest(filename string, queryOpts promqltest.LazyLoaderOpts, run *regexp.Regexp, diffFlag, debug, ignoreUnknownFields bool, ts *junitxml.TestSuite) []error {
+func ruleUnitTest(filename string, queryOpts promqltest.LazyLoaderOpts, run *regexp.Regexp, diffFlag bool, ts *junitxml.TestSuite) []error {
 	b, err := os.ReadFile(filename)
 	if err != nil {
 		ts.Abort(err)
@@ -131,7 +131,7 @@ func ruleUnitTest(filename string, queryOpts promqltest.LazyLoaderOpts, run *reg
 		if t.Interval == 0 {
 			t.Interval = unitTestInp.EvaluationInterval
 		}
-		ers := t.test(testname, evalInterval, groupOrderMap, queryOpts, diffFlag, debug, ignoreUnknownFields, unitTestInp.FuzzyCompare, unitTestInp.RuleFiles...)
+		ers := t.test(evalInterval, groupOrderMap, queryOpts, diffFlag, unitTestInp.RuleFiles...)
 		if ers != nil {
 			for _, e := range ers {
 				tc.Fail(e.Error())
@@ -160,7 +160,6 @@ type unitTestFile struct {
 	EvaluationInterval model.Duration `yaml:"evaluation_interval,omitempty"`
 	GroupEvalOrder     []string       `yaml:"group_eval_order"`
 	Tests              []testGroup    `yaml:"tests"`
-	FuzzyCompare       bool           `yaml:"fuzzy_compare,omitempty"`
 }
 
 // resolveAndGlobFilepaths joins all relative paths in a configuration
@@ -199,14 +198,7 @@ type testGroup struct {
 }
 
 // test performs the unit tests.
-func (tg *testGroup) test(testname string, evalInterval time.Duration, groupOrderMap map[string]int, queryOpts promqltest.LazyLoaderOpts, diffFlag, debug, ignoreUnknownFields, fuzzyCompare bool, ruleFiles ...string) (outErr []error) {
-	if debug {
-		testStart := time.Now()
-		fmt.Printf("DEBUG: Starting test %s\n", testname)
-		defer func() {
-			fmt.Printf("DEBUG: Test %s finished, took %v\n", testname, time.Since(testStart))
-		}()
-	}
+func (tg *testGroup) test(evalInterval time.Duration, groupOrderMap map[string]int, queryOpts promqltest.LazyLoaderOpts, diffFlag bool, ruleFiles ...string) (outErr []error) {
 	// Setup testing suite.
 	suite, err := promqltest.NewLazyLoader(tg.seriesLoadingString(), queryOpts)
 	if err != nil {
@@ -225,11 +217,11 @@ func (tg *testGroup) test(testname string, evalInterval time.Duration, groupOrde
 		QueryFunc:  rules.EngineQueryFunc(suite.QueryEngine(), suite.Storage()),
 		Appendable: suite.Storage(),
 		Context:    context.Background(),
-		NotifyFunc: func(_ context.Context, _ string, _ ...*rules.Alert) {},
-		Logger:     promslog.NewNopLogger(),
+		NotifyFunc: func(ctx context.Context, expr string, alerts ...*rules.Alert) {},
+		Logger:     log.NewNopLogger(),
 	}
 	m := rules.NewManager(opts)
-	groupsMap, ers := m.LoadGroups(time.Duration(tg.Interval), tg.ExternalLabels, tg.ExternalURL, nil, ignoreUnknownFields, ruleFiles...)
+	groupsMap, ers := m.LoadGroups(time.Duration(tg.Interval), tg.ExternalLabels, tg.ExternalURL, nil, ruleFiles...)
 	if ers != nil {
 		return ers
 	}
@@ -238,14 +230,6 @@ func (tg *testGroup) test(testname string, evalInterval time.Duration, groupOrde
 	// Bounds for evaluating the rules.
 	mint := time.Unix(0, 0).UTC()
 	maxt := mint.Add(tg.maxEvalTime())
-
-	// Optional floating point compare fuzzing.
-	var compareFloat64 cmp.Option = cmp.Options{}
-	if fuzzyCompare {
-		compareFloat64 = cmp.Comparer(func(x, y float64) bool {
-			return x == y || math.Nextafter(x, math.Inf(-1)) == y || math.Nextafter(x, math.Inf(1)) == y
-		})
-	}
 
 	// Pre-processing some data for testing alerts.
 	// All this preparation is so that we can test alerts as we evaluate the rules.
@@ -321,8 +305,12 @@ func (tg *testGroup) test(testname string, evalInterval time.Duration, groupOrde
 			return errs
 		}
 
-		for curr < len(alertEvalTimes) && ts.Sub(mint) <= time.Duration(alertEvalTimes[curr]) &&
-			time.Duration(alertEvalTimes[curr]) < ts.Add(evalInterval).Sub(mint) {
+		for {
+			if !(curr < len(alertEvalTimes) && ts.Sub(mint) <= time.Duration(alertEvalTimes[curr]) &&
+				time.Duration(alertEvalTimes[curr]) < ts.Add(evalInterval).Sub(mint)) {
+				break
+			}
+
 			// We need to check alerts for this time.
 			// If 'ts <= `eval_time=alertEvalTimes[curr]` < ts+evalInterval'
 			// then we compare alerts with the Eval at `ts`.
@@ -380,7 +368,7 @@ func (tg *testGroup) test(testname string, evalInterval time.Duration, groupOrde
 				sort.Sort(gotAlerts)
 				sort.Sort(expAlerts)
 
-				if !cmp.Equal(expAlerts, gotAlerts, cmp.Comparer(labels.Equal), compareFloat64) {
+				if !cmp.Equal(expAlerts, gotAlerts, cmp.Comparer(labels.Equal)) {
 					var testName string
 					if tg.TestGroupName != "" {
 						testName = fmt.Sprintf("    name: %s,\n", tg.TestGroupName)
@@ -488,35 +476,9 @@ Outer:
 		sort.Slice(gotSamples, func(i, j int) bool {
 			return labels.Compare(gotSamples[i].Labels, gotSamples[j].Labels) <= 0
 		})
-		if !cmp.Equal(expSamples, gotSamples, cmp.Comparer(labels.Equal), compareFloat64) {
+		if !cmp.Equal(expSamples, gotSamples, cmp.Comparer(labels.Equal)) {
 			errs = append(errs, fmt.Errorf("    expr: %q, time: %s,\n        exp: %v\n        got: %v", testCase.Expr,
 				testCase.EvalTime.String(), parsedSamplesString(expSamples), parsedSamplesString(gotSamples)))
-		}
-	}
-
-	if debug {
-		ts := tg.maxEvalTime()
-		// Potentially a test can be specified at a time with fractional seconds,
-		// which PromQL cannot represent, so round up to the next whole second.
-		ts = (ts + time.Second).Truncate(time.Second)
-		expr := fmt.Sprintf(`{__name__=~".+"}[%v]`, ts)
-		q, err := suite.QueryEngine().NewInstantQuery(context.Background(), suite.Queryable(), nil, expr, mint.Add(ts))
-		if err != nil {
-			fmt.Printf("DEBUG: Failed querying, expr: %q, err: %v\n", expr, err)
-			return errs
-		}
-		res := q.Exec(suite.Context())
-		if res.Err != nil {
-			fmt.Printf("DEBUG: Failed query exec, expr: %q, err: %v\n", expr, res.Err)
-			return errs
-		}
-		switch v := res.Value.(type) {
-		case promql.Matrix:
-			fmt.Printf("DEBUG: Dump of all data (input_series and rules) at %v:\n", ts)
-			fmt.Println(v.String())
-		default:
-			fmt.Printf("DEBUG: Got unexpected type %T\n", v)
-			return errs
 		}
 	}
 

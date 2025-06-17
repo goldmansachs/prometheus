@@ -93,7 +93,7 @@ func TestNoDuplicateReadConfigs(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run("", func(t *testing.T) {
-			s := NewStorage(nil, nil, nil, dir, defaultFlushDeadline, nil)
+			s := NewStorage(nil, nil, nil, dir, defaultFlushDeadline, nil, false)
 			conf := &config.Config{
 				GlobalConfig:      config.DefaultGlobalConfig,
 				RemoteReadConfigs: tc.cfgs,
@@ -475,9 +475,7 @@ func TestSampleAndChunkQueryableClient(t *testing.T) {
 			)
 			q, err := c.Querier(tc.mint, tc.maxt)
 			require.NoError(t, err)
-			defer func() {
-				require.NoError(t, q.Close())
-			}()
+			defer require.NoError(t, q.Close())
 
 			ss := q.Select(context.Background(), true, nil, tc.matchers...)
 			require.NoError(t, err)

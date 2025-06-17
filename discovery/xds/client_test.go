@@ -52,14 +52,16 @@ func TestMakeXDSResourceHttpEndpointEmptyServerURLScheme(t *testing.T) {
 	endpointURL, err := makeXDSResourceHTTPEndpointURL(ProtocolV3, urlMustParse("127.0.0.1"), "monitoring")
 
 	require.Empty(t, endpointURL)
-	require.EqualError(t, err, "invalid xDS server URL")
+	require.Error(t, err)
+	require.Equal(t, "invalid xDS server URL", err.Error())
 }
 
 func TestMakeXDSResourceHttpEndpointEmptyServerURLHost(t *testing.T) {
 	endpointURL, err := makeXDSResourceHTTPEndpointURL(ProtocolV3, urlMustParse("grpc://127.0.0.1"), "monitoring")
 
 	require.Empty(t, endpointURL)
-	require.ErrorContains(t, err, "must be either 'http' or 'https'")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "must be either 'http' or 'https'")
 }
 
 func TestMakeXDSResourceHttpEndpoint(t *testing.T) {
@@ -106,7 +108,7 @@ func createTestHTTPResourceClient(t *testing.T, conf *HTTPResourceClientConfig, 
 }
 
 func TestHTTPResourceClientFetchEmptyResponse(t *testing.T) {
-	client, cleanup := createTestHTTPResourceClient(t, testHTTPResourceConfig(), ProtocolV3, func(_ *v3.DiscoveryRequest) (*v3.DiscoveryResponse, error) {
+	client, cleanup := createTestHTTPResourceClient(t, testHTTPResourceConfig(), ProtocolV3, func(request *v3.DiscoveryRequest) (*v3.DiscoveryResponse, error) {
 		return nil, nil
 	})
 	defer cleanup()
@@ -146,7 +148,7 @@ func TestHTTPResourceClientFetchFullResponse(t *testing.T) {
 }
 
 func TestHTTPResourceClientServerError(t *testing.T) {
-	client, cleanup := createTestHTTPResourceClient(t, testHTTPResourceConfig(), ProtocolV3, func(_ *v3.DiscoveryRequest) (*v3.DiscoveryResponse, error) {
+	client, cleanup := createTestHTTPResourceClient(t, testHTTPResourceConfig(), ProtocolV3, func(request *v3.DiscoveryRequest) (*v3.DiscoveryResponse, error) {
 		return nil, errors.New("server error")
 	})
 	defer cleanup()

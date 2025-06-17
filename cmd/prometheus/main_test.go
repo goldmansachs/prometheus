@@ -20,37 +20,27 @@ import (
 	"fmt"
 	"io"
 	"math"
-	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
-	"sync"
 	"syscall"
 	"testing"
 	"time"
 
 	"github.com/alecthomas/kingpin/v2"
+	"github.com/go-kit/log"
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/common/expfmt"
 	"github.com/prometheus/common/model"
-	"github.com/prometheus/common/promslog"
 	"github.com/stretchr/testify/require"
 
 	"github.com/prometheus/prometheus/config"
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/notifier"
 	"github.com/prometheus/prometheus/rules"
-	"github.com/prometheus/prometheus/util/testutil"
 )
-
-func init() {
-	// This can be removed when the legacy global mode is fully deprecated.
-	//nolint:staticcheck
-	model.NameValidationScheme = model.UTF8Validation
-}
 
 const startupTime = 10 * time.Second
 
@@ -130,7 +120,6 @@ func TestFailedStartupExitCode(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping test in short mode.")
 	}
-	t.Parallel()
 
 	fakeInputFile := "fake-input-file"
 	expectedExitStatus := 2
@@ -217,139 +206,83 @@ func TestWALSegmentSizeBounds(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping test in short mode.")
 	}
-	t.Parallel()
 
-	for _, tc := range []struct {
-		size     string
-		exitCode int
-	}{
-		{
-			size:     "9MB",
-			exitCode: 1,
-		},
-		{
-			size:     "257MB",
-			exitCode: 1,
-		},
-		{
-			size:     "10",
-			exitCode: 2,
-		},
-		{
-			size:     "1GB",
-			exitCode: 1,
-		},
-		{
-			size:     "12MB",
-			exitCode: 0,
-		},
-	} {
-		t.Run(tc.size, func(t *testing.T) {
-			t.Parallel()
-			prom := exec.Command(promPath, "-test.main", "--storage.tsdb.wal-segment-size="+tc.size, "--web.listen-address=0.0.0.0:0", "--config.file="+promConfig, "--storage.tsdb.path="+filepath.Join(t.TempDir(), "data"))
+	for size, expectedExitStatus := range map[string]int{"9MB": 1, "257MB": 1, "10": 2, "1GB": 1, "12MB": 0} {
+		prom := exec.Command(promPath, "-test.main", "--storage.tsdb.wal-segment-size="+size, "--web.listen-address=0.0.0.0:0", "--config.file="+promConfig, "--storage.tsdb.path="+filepath.Join(t.TempDir(), "data"))
 
-			// Log stderr in case of failure.
-			stderr, err := prom.StderrPipe()
-			require.NoError(t, err)
+		// Log stderr in case of failure.
+		stderr, err := prom.StderrPipe()
+		require.NoError(t, err)
+		go func() {
+			slurp, _ := io.ReadAll(stderr)
+			t.Log(string(slurp))
+		}()
 
-			// WaitGroup is used to ensure that we don't call t.Log() after the test has finished.
-			var wg sync.WaitGroup
-			wg.Add(1)
-			defer wg.Wait()
+		err = prom.Start()
+		require.NoError(t, err)
 
-			go func() {
-				defer wg.Done()
-				slurp, _ := io.ReadAll(stderr)
-				t.Log(string(slurp))
-			}()
-
-			err = prom.Start()
-			require.NoError(t, err)
-
-			if tc.exitCode == 0 {
-				done := make(chan error, 1)
-				go func() { done <- prom.Wait() }()
-				select {
-				case err := <-done:
-					t.Fatalf("prometheus should be still running: %v", err)
-				case <-time.After(startupTime):
-					prom.Process.Kill()
-					<-done
-				}
-				return
+		if expectedExitStatus == 0 {
+			done := make(chan error, 1)
+			go func() { done <- prom.Wait() }()
+			select {
+			case err := <-done:
+				require.Fail(t, "prometheus should be still running: %v", err)
+			case <-time.After(startupTime):
+				prom.Process.Kill()
+				<-done
 			}
+			continue
+		}
 
-			err = prom.Wait()
-			require.Error(t, err)
-			var exitError *exec.ExitError
-			require.ErrorAs(t, err, &exitError)
-			status := exitError.Sys().(syscall.WaitStatus)
-			require.Equal(t, tc.exitCode, status.ExitStatus())
-		})
+		err = prom.Wait()
+		require.Error(t, err)
+		var exitError *exec.ExitError
+		require.ErrorAs(t, err, &exitError)
+		status := exitError.Sys().(syscall.WaitStatus)
+		require.Equal(t, expectedExitStatus, status.ExitStatus())
 	}
 }
 
 func TestMaxBlockChunkSegmentSizeBounds(t *testing.T) {
+	t.Parallel()
+
 	if testing.Short() {
 		t.Skip("skipping test in short mode.")
 	}
-	t.Parallel()
 
-	for _, tc := range []struct {
-		size     string
-		exitCode int
-	}{
-		{
-			size:     "512KB",
-			exitCode: 1,
-		},
-		{
-			size:     "1MB",
-			exitCode: 0,
-		},
-	} {
-		t.Run(tc.size, func(t *testing.T) {
-			t.Parallel()
-			prom := exec.Command(promPath, "-test.main", "--storage.tsdb.max-block-chunk-segment-size="+tc.size, "--web.listen-address=0.0.0.0:0", "--config.file="+promConfig, "--storage.tsdb.path="+filepath.Join(t.TempDir(), "data"))
+	for size, expectedExitStatus := range map[string]int{"512KB": 1, "1MB": 0} {
+		prom := exec.Command(promPath, "-test.main", "--storage.tsdb.max-block-chunk-segment-size="+size, "--web.listen-address=0.0.0.0:0", "--config.file="+promConfig, "--storage.tsdb.path="+filepath.Join(t.TempDir(), "data"))
 
-			// Log stderr in case of failure.
-			stderr, err := prom.StderrPipe()
-			require.NoError(t, err)
+		// Log stderr in case of failure.
+		stderr, err := prom.StderrPipe()
+		require.NoError(t, err)
+		go func() {
+			slurp, _ := io.ReadAll(stderr)
+			t.Log(string(slurp))
+		}()
 
-			// WaitGroup is used to ensure that we don't call t.Log() after the test has finished.
-			var wg sync.WaitGroup
-			wg.Add(1)
-			defer wg.Wait()
+		err = prom.Start()
+		require.NoError(t, err)
 
-			go func() {
-				defer wg.Done()
-				slurp, _ := io.ReadAll(stderr)
-				t.Log(string(slurp))
-			}()
-
-			err = prom.Start()
-			require.NoError(t, err)
-
-			if tc.exitCode == 0 {
-				done := make(chan error, 1)
-				go func() { done <- prom.Wait() }()
-				select {
-				case err := <-done:
-					t.Fatalf("prometheus should be still running: %v", err)
-				case <-time.After(startupTime):
-					prom.Process.Kill()
-					<-done
-				}
-				return
+		if expectedExitStatus == 0 {
+			done := make(chan error, 1)
+			go func() { done <- prom.Wait() }()
+			select {
+			case err := <-done:
+				require.Fail(t, "prometheus should be still running: %v", err)
+			case <-time.After(startupTime):
+				prom.Process.Kill()
+				<-done
 			}
+			continue
+		}
 
-			err = prom.Wait()
-			require.Error(t, err)
-			var exitError *exec.ExitError
-			require.ErrorAs(t, err, &exitError)
-			status := exitError.Sys().(syscall.WaitStatus)
-			require.Equal(t, tc.exitCode, status.ExitStatus())
-		})
+		err = prom.Wait()
+		require.Error(t, err)
+		var exitError *exec.ExitError
+		require.ErrorAs(t, err, &exitError)
+		status := exitError.Sys().(syscall.WaitStatus)
+		require.Equal(t, expectedExitStatus, status.ExitStatus())
 	}
 }
 
@@ -357,7 +290,7 @@ func TestTimeMetrics(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	reg := prometheus.NewRegistry()
-	db, err := openDBWithMetrics(tmpDir, promslog.NewNopLogger(), reg, nil, nil)
+	db, err := openDBWithMetrics(tmpDir, log.NewNopLogger(), reg, nil, nil)
 	require.NoError(t, err)
 	defer func() {
 		require.NoError(t, db.Close())
@@ -415,9 +348,7 @@ func getCurrentGaugeValuesFor(t *testing.T, reg prometheus.Gatherer, metricNames
 }
 
 func TestAgentSuccessfulStartup(t *testing.T) {
-	t.Parallel()
-
-	prom := exec.Command(promPath, "-test.main", "--agent", "--web.listen-address=0.0.0.0:0", "--config.file="+agentConfig)
+	prom := exec.Command(promPath, "-test.main", "--enable-feature=agent", "--web.listen-address=0.0.0.0:0", "--config.file="+agentConfig)
 	require.NoError(t, prom.Start())
 
 	actualExitStatus := 0
@@ -435,9 +366,7 @@ func TestAgentSuccessfulStartup(t *testing.T) {
 }
 
 func TestAgentFailedStartupWithServerFlag(t *testing.T) {
-	t.Parallel()
-
-	prom := exec.Command(promPath, "-test.main", "--agent", "--storage.tsdb.path=.", "--web.listen-address=0.0.0.0:0", "--config.file="+promConfig)
+	prom := exec.Command(promPath, "-test.main", "--enable-feature=agent", "--storage.tsdb.path=.", "--web.listen-address=0.0.0.0:0", "--config.file="+promConfig)
 
 	output := bytes.Buffer{}
 	prom.Stderr = &output
@@ -464,9 +393,7 @@ func TestAgentFailedStartupWithServerFlag(t *testing.T) {
 }
 
 func TestAgentFailedStartupWithInvalidConfig(t *testing.T) {
-	t.Parallel()
-
-	prom := exec.Command(promPath, "-test.main", "--agent", "--web.listen-address=0.0.0.0:0", "--config.file="+promConfig)
+	prom := exec.Command(promPath, "-test.main", "--enable-feature=agent", "--web.listen-address=0.0.0.0:0", "--config.file="+promConfig)
 	require.NoError(t, prom.Start())
 
 	actualExitStatus := 0
@@ -487,7 +414,6 @@ func TestModeSpecificFlags(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping test in short mode.")
 	}
-	t.Parallel()
 
 	testcases := []struct {
 		mode       string
@@ -502,11 +428,10 @@ func TestModeSpecificFlags(t *testing.T) {
 
 	for _, tc := range testcases {
 		t.Run(fmt.Sprintf("%s mode with option %s", tc.mode, tc.arg), func(t *testing.T) {
-			t.Parallel()
 			args := []string{"-test.main", tc.arg, t.TempDir(), "--web.listen-address=0.0.0.0:0"}
 
 			if tc.mode == "agent" {
-				args = append(args, "--agent", "--config.file="+agentConfig)
+				args = append(args, "--enable-feature=agent", "--config.file="+agentConfig)
 			} else {
 				args = append(args, "--config.file="+promConfig)
 			}
@@ -516,14 +441,7 @@ func TestModeSpecificFlags(t *testing.T) {
 			// Log stderr in case of failure.
 			stderr, err := prom.StderrPipe()
 			require.NoError(t, err)
-
-			// WaitGroup is used to ensure that we don't call t.Log() after the test has finished.
-			var wg sync.WaitGroup
-			wg.Add(1)
-			defer wg.Wait()
-
 			go func() {
-				defer wg.Done()
 				slurp, _ := io.ReadAll(stderr)
 				t.Log(string(slurp))
 			}()
@@ -561,8 +479,6 @@ func TestDocumentation(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.SkipNow()
 	}
-	t.Parallel()
-
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -587,8 +503,6 @@ func TestDocumentation(t *testing.T) {
 }
 
 func TestRwProtoMsgFlagParser(t *testing.T) {
-	t.Parallel()
-
 	defaultOpts := config.RemoteWriteProtoMsgs{
 		config.RemoteWriteProtoMsgV1, config.RemoteWriteProtoMsgV2,
 	}
@@ -646,123 +560,6 @@ func TestRwProtoMsgFlagParser(t *testing.T) {
 				require.NoError(t, err)
 				require.Equal(t, tcase.expected, opt)
 			}
-		})
-	}
-}
-
-func getGaugeValue(t *testing.T, body io.ReadCloser, metricName string) (float64, error) {
-	t.Helper()
-
-	p := expfmt.TextParser{}
-	metricFamilies, err := p.TextToMetricFamilies(body)
-	if err != nil {
-		return 0, err
-	}
-	metricFamily, ok := metricFamilies[metricName]
-	if !ok {
-		return 0, errors.New("metric family not found")
-	}
-	metric := metricFamily.GetMetric()
-	if len(metric) != 1 {
-		return 0, errors.New("metric not found")
-	}
-	return metric[0].GetGauge().GetValue(), nil
-}
-
-func TestRuntimeGOGCConfig(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping test in short mode.")
-	}
-	t.Parallel()
-
-	for _, tc := range []struct {
-		name         string
-		config       string
-		gogcEnvVar   string
-		expectedGOGC int
-	}{
-		{
-			name:         "empty config file",
-			expectedGOGC: 75,
-		},
-		// the GOGC env var is ignored in this case, see https://github.com/prometheus/prometheus/issues/16334
-		/* 		{
-			name:         "empty config file with GOGC env var set",
-			gogcEnvVar:   "66",
-			expectedGOGC: 66,
-		}, */
-		{
-			name: "gogc set through config",
-			config: `
-runtime:
-  gogc: 77`,
-			expectedGOGC: 77,
-		},
-		{
-			name: "gogc set through config and env var",
-			config: `
-runtime:
-  gogc: 77`,
-			gogcEnvVar:   "88",
-			expectedGOGC: 77,
-		},
-		{
-			name: "incomplete runtime block",
-			config: `
-runtime:`,
-			expectedGOGC: 75,
-		},
-		{
-			name: "incomplete runtime block and GOGC env var set",
-			config: `
-runtime:`,
-			gogcEnvVar:   "88",
-			expectedGOGC: 88,
-		},
-		// the GOGC env var is ignored in this case, see https://github.com/prometheus/prometheus/issues/16334
-		/* 		{
-					name: "unrelated config and GOGC env var set",
-					config: `
-		global:
-		  scrape_interval: 500ms`,
-					gogcEnvVar:   "80",
-					expectedGOGC: 80,
-				}, */
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-
-			tmpDir := t.TempDir()
-			configFile := filepath.Join(tmpDir, "prometheus.yml")
-
-			port := testutil.RandomUnprivilegedPort(t)
-			os.WriteFile(configFile, []byte(tc.config), 0o777)
-			prom := prometheusCommandWithLogging(t, configFile, port, fmt.Sprintf("--storage.tsdb.path=%s", tmpDir))
-			// Inject GOGC when set.
-			prom.Env = os.Environ()
-			if tc.gogcEnvVar != "" {
-				prom.Env = append(prom.Env, fmt.Sprintf("GOGC=%s", tc.gogcEnvVar))
-			}
-			require.NoError(t, prom.Start())
-
-			var (
-				r   *http.Response
-				err error
-			)
-			// Wait for the /metrics endpoint to be ready.
-			require.Eventually(t, func() bool {
-				r, err = http.Get(fmt.Sprintf("http://127.0.0.1:%d/metrics", port))
-				if err != nil {
-					return false
-				}
-				return r.StatusCode == http.StatusOK
-			}, 5*time.Second, 50*time.Millisecond)
-			defer r.Body.Close()
-
-			// Check the final GOGC that's set, consider go_gc_gogc_percent from /metrics as source of truth.
-			gogc, err := getGaugeValue(t, r.Body, "go_gc_gogc_percent")
-			require.NoError(t, err)
-			require.Equal(t, float64(tc.expectedGOGC), gogc)
 		})
 	}
 }

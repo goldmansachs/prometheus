@@ -23,9 +23,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/go-kit/log"
 	"github.com/grafana/regexp"
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/common/promslog"
 	"github.com/prometheus/common/route"
 	"github.com/stretchr/testify/require"
 
@@ -105,7 +105,7 @@ func createPrometheusAPI(t *testing.T, q storage.SampleAndChunkQueryable) *route
 	t.Helper()
 
 	engine := promqltest.NewTestEngineWithOpts(t, promql.EngineOpts{
-		Logger:             promslog.NewNopLogger(),
+		Logger:             log.NewNopLogger(),
 		Reg:                nil,
 		ActiveQueryTracker: nil,
 		MaxSamples:         100,
@@ -127,23 +127,18 @@ func createPrometheusAPI(t *testing.T, q storage.SampleAndChunkQueryable) *route
 		nil,   // Only needed for admin APIs.
 		"",    // This is for snapshots, which is disabled when admin APIs are disabled. Hence empty.
 		false, // Disable admin APIs.
-		promslog.NewNopLogger(),
+		log.NewNopLogger(),
 		func(context.Context) RulesRetriever { return &DummyRulesRetriever{} },
 		0, 0, 0, // Remote read samples and concurrency limit.
 		false, // Not an agent.
 		regexp.MustCompile(".*"),
 		func() (RuntimeInfo, error) { return RuntimeInfo{}, errors.New("not implemented") },
 		&PrometheusVersion{},
-		nil,
-		nil,
 		prometheus.DefaultGatherer,
 		nil,
 		nil,
 		false,
 		config.RemoteWriteProtoMsgs{config.RemoteWriteProtoMsgV1, config.RemoteWriteProtoMsgV2},
-		false,
-		false,
-		false,
 		false,
 	)
 
@@ -159,15 +154,15 @@ type errorTestQueryable struct {
 	err error
 }
 
-func (t errorTestQueryable) ExemplarQuerier(_ context.Context) (storage.ExemplarQuerier, error) {
+func (t errorTestQueryable) ExemplarQuerier(ctx context.Context) (storage.ExemplarQuerier, error) {
 	return nil, t.err
 }
 
-func (t errorTestQueryable) ChunkQuerier(_, _ int64) (storage.ChunkQuerier, error) {
+func (t errorTestQueryable) ChunkQuerier(mint, maxt int64) (storage.ChunkQuerier, error) {
 	return nil, t.err
 }
 
-func (t errorTestQueryable) Querier(_, _ int64) (storage.Querier, error) {
+func (t errorTestQueryable) Querier(mint, maxt int64) (storage.Querier, error) {
 	if t.q != nil {
 		return t.q, nil
 	}
@@ -191,7 +186,7 @@ func (t errorTestQuerier) Close() error {
 	return nil
 }
 
-func (t errorTestQuerier) Select(_ context.Context, _ bool, _ *storage.SelectHints, _ ...*labels.Matcher) storage.SeriesSet {
+func (t errorTestQuerier) Select(_ context.Context, sortSeries bool, hints *storage.SelectHints, matchers ...*labels.Matcher) storage.SeriesSet {
 	if t.s != nil {
 		return t.s
 	}
@@ -218,7 +213,7 @@ func (t errorTestSeriesSet) Warnings() annotations.Annotations {
 	return nil
 }
 
-// DummyScrapePoolsRetriever implements github.com/prometheus/prometheus/web/api/v1.ScrapePoolsRetriever.
+// DummyTargetRetriever implements github.com/prometheus/prometheus/web/api/v1.ScrapePoolsRetriever.
 type DummyScrapePoolsRetriever struct{}
 
 func (DummyScrapePoolsRetriever) ScrapePools() []string {

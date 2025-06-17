@@ -50,7 +50,7 @@ func GenerateMarkdown(model *kingpin.ApplicationModel, writer io.Writer) error {
 		return err
 	}
 
-	return writeSubcommands(writer, 1, model.Name, model.Commands)
+	return writeSubcommands(writer, 1, model.Name, model.CmdGroupModel.Commands)
 }
 
 func header(title, help string) []byte {
@@ -172,13 +172,13 @@ func writeTable(writer io.Writer, data [][]string, header string) error {
 
 	buf := bytes.NewBuffer(nil)
 
-	fmt.Fprintf(buf, "\n\n%s\n\n", header)
+	buf.WriteString(fmt.Sprintf("\n\n%s\n\n", header))
 	columnsToRender := determineColumnsToRender(data)
 
 	headers := data[0]
 	buf.WriteString("|")
 	for _, j := range columnsToRender {
-		fmt.Fprintf(buf, " %s |", headers[j])
+		buf.WriteString(fmt.Sprintf(" %s |", headers[j]))
 	}
 	buf.WriteString("\n")
 
@@ -192,7 +192,7 @@ func writeTable(writer io.Writer, data [][]string, header string) error {
 		row := data[i]
 		buf.WriteString("|")
 		for _, j := range columnsToRender {
-			fmt.Fprintf(buf, " %s |", row[j])
+			buf.WriteString(fmt.Sprintf(" %s |", row[j]))
 		}
 		buf.WriteString("\n")
 	}
@@ -243,7 +243,7 @@ func writeSubcommands(writer io.Writer, level int, modelName string, commands []
 			help = cmd.HelpLong
 		}
 		help = formatHyphenatedWords(help)
-		if _, err := fmt.Fprintf(writer, "\n\n%s `%s %s`\n\n%s\n\n", strings.Repeat("#", level+1), modelName, cmd.FullCommand, help); err != nil {
+		if _, err := writer.Write([]byte(fmt.Sprintf("\n\n%s `%s %s`\n\n%s\n\n", strings.Repeat("#", level+1), modelName, cmd.FullCommand, help))); err != nil {
 			return err
 		}
 
@@ -255,8 +255,8 @@ func writeSubcommands(writer io.Writer, level int, modelName string, commands []
 			return err
 		}
 
-		if cmd.CmdGroupModel != nil && len(cmd.Commands) > 0 {
-			if err := writeSubcommands(writer, level+1, modelName, cmd.Commands); err != nil {
+		if cmd.CmdGroupModel != nil && len(cmd.CmdGroupModel.Commands) > 0 {
+			if err := writeSubcommands(writer, level+1, modelName, cmd.CmdGroupModel.Commands); err != nil {
 				return err
 			}
 		}

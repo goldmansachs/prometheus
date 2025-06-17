@@ -46,7 +46,7 @@ import {
   HistogramStdDev,
   HistogramStdVar,
   HistogramSum,
-  DoubleExponentialSmoothing,
+  HoltWinters,
   Hour,
   Idelta,
   Increase,
@@ -313,8 +313,8 @@ const promqlFunctions: { [key: number]: PromQLFunction } = {
     variadic: 0,
     returnType: ValueType.vector,
   },
-  [DoubleExponentialSmoothing]: {
-    name: 'double_exponential_smoothing',
+  [HoltWinters]: {
+    name: 'holt_winters',
     argTypes: [ValueType.matrix, ValueType.scalar, ValueType.scalar],
     variadic: 0,
     returnType: ValueType.vector,

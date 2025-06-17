@@ -186,7 +186,7 @@ START_METRIC_SELECTOR
 %type <int> int
 %type <uint> uint
 %type <float> number series_value signed_number signed_or_unsigned_number
-%type <node> step_invariant_expr aggregate_expr aggregate_modifier bin_modifier binary_expr bool_modifier expr function_call function_call_args function_call_body group_modifiers label_matchers matrix_selector number_duration_literal offset_expr on_or_ignoring paren_expr string_literal subquery_expr unary_expr vector_selector duration_expr paren_duration_expr positive_duration_expr
+%type <node> step_invariant_expr aggregate_expr aggregate_modifier bin_modifier binary_expr bool_modifier expr function_call function_call_args function_call_body group_modifiers label_matchers matrix_selector number_duration_literal offset_expr on_or_ignoring paren_expr string_literal subquery_expr unary_expr vector_selector
 
 %start start
 
@@ -235,7 +235,6 @@ expr            :
                 | unary_expr
                 | vector_selector
                 | step_invariant_expr
-                | duration_expr
                 ;
 
 /*
@@ -364,18 +363,17 @@ grouping_label_list:
 grouping_label  : maybe_label
                         {
                         if !model.LabelName($1.Val).IsValid() {
-                                yylex.(*parser).addParseErrf($1.PositionRange(),"invalid label name for grouping: %q", $1.Val)
+                                yylex.(*parser).unexpected("grouping opts", "label")
                         }
                         $$ = $1
                         }
                 | STRING {
-                        unquoted := yylex.(*parser).unquoteString($1.Val)
-                        if !model.LabelName(unquoted).IsValid() {
-                                yylex.(*parser).addParseErrf($1.PositionRange(),"invalid label name for grouping: %q", unquoted)
+                        if !model.LabelName(yylex.(*parser).unquoteString($1.Val)).IsValid() {
+                                yylex.(*parser).unexpected("grouping opts", "label")
                         }
                         $$ = $1
                         $$.Pos++
-                        $$.Val = unquoted
+                        $$.Val = yylex.(*parser).unquoteString($$.Val)
                         }
                 | error
                         { yylex.(*parser).unexpected("grouping opts", "label"); $$ = Item{} }
@@ -434,35 +432,23 @@ paren_expr      : LEFT_PAREN expr RIGHT_PAREN
  * Offset modifiers.
  */
 
-positive_duration_expr : duration_expr
+offset_expr: expr OFFSET number_duration_literal
                         {
-                            if numLit, ok := $1.(*NumberLiteral); ok {
-                                if numLit.Val <= 0 {
-                                    yylex.(*parser).addParseErrf(numLit.PositionRange(), "duration must be greater than 0")
-                                    $$ = &NumberLiteral{Val: 0} // Return 0 on error.
-                                    break
-                                }
-                                $$ = $1
-                                break
-                            }
+  		            numLit, _ := $3.(*NumberLiteral)
+      		            dur := time.Duration(numLit.Val * 1000) * time.Millisecond
+                 	    yylex.(*parser).addOffset($1, dur)
                             $$ = $1
                         }
-                ;
-
-offset_expr: expr OFFSET duration_expr
+                | expr OFFSET SUB number_duration_literal
                         {
-                        if numLit, ok := $3.(*NumberLiteral); ok {
-                            yylex.(*parser).addOffset($1, time.Duration(math.Round(numLit.Val*float64(time.Second))))
+			    numLit, _ := $4.(*NumberLiteral)
+		            dur := time.Duration(numLit.Val * 1000) * time.Millisecond
+			    yylex.(*parser).addOffset($1, -dur)
                             $$ = $1
-                            break
-                        }
-                        yylex.(*parser).addOffsetExpr($1, $3.(*DurationExpr))
-                        $$ = $1
                         }
                 | expr OFFSET error
                         { yylex.(*parser).unexpected("offset", "number or duration"); $$ = $1 }
                 ;
-
 /*
  * @ modifiers.
  */
@@ -487,7 +473,7 @@ at_modifier_preprocessors: START | END;
  * Subquery and range selectors.
  */
 
-matrix_selector : expr LEFT_BRACKET positive_duration_expr RIGHT_BRACKET
+matrix_selector : expr LEFT_BRACKET number_duration_literal RIGHT_BRACKET
                         {
                         var errMsg string
                         vs, ok := $1.(*VectorSelector)
@@ -501,63 +487,44 @@ matrix_selector : expr LEFT_BRACKET positive_duration_expr RIGHT_BRACKET
 
                         if errMsg != ""{
                                 errRange := mergeRanges(&$2, &$4)
-                                yylex.(*parser).addParseErrf(errRange, "%s", errMsg)
+                                yylex.(*parser).addParseErrf(errRange, errMsg)
                         }
 
-                        var rangeNl time.Duration
-                        if numLit, ok := $3.(*NumberLiteral); ok {
-                                rangeNl = time.Duration(math.Round(numLit.Val*float64(time.Second)))
-                        }
-                        rangeExpr, _ := $3.(*DurationExpr)
+			numLit, _ := $3.(*NumberLiteral)
                         $$ = &MatrixSelector{
                                 VectorSelector: $1.(Expr),
-                                Range: rangeNl,
-                                RangeExpr: rangeExpr,
+                                Range: time.Duration(numLit.Val * 1000) * time.Millisecond,
                                 EndPos: yylex.(*parser).lastClosing,
                         }
                         }
                 ;
 
-subquery_expr   : expr LEFT_BRACKET positive_duration_expr COLON positive_duration_expr RIGHT_BRACKET
+subquery_expr   : expr LEFT_BRACKET number_duration_literal COLON number_duration_literal RIGHT_BRACKET
                         {
-                        var rangeNl time.Duration
-                        var stepNl time.Duration
-                        if numLit, ok := $3.(*NumberLiteral); ok {
-                                rangeNl = time.Duration(math.Round(numLit.Val*float64(time.Second)))
-                        }
-                        rangeExpr, _ := $3.(*DurationExpr)
-                        if numLit, ok := $5.(*NumberLiteral); ok {
-                                stepNl = time.Duration(math.Round(numLit.Val*float64(time.Second)))
-                        }
-                        stepExpr, _ := $5.(*DurationExpr)
+			numLitRange, _ := $3.(*NumberLiteral)
+			numLitStep, _ := $5.(*NumberLiteral)
                         $$ = &SubqueryExpr{
                                 Expr:  $1.(Expr),
-                                Range: rangeNl,
-                                RangeExpr: rangeExpr,
-                                Step: stepNl,
-                                StepExpr:  stepExpr,
+                                Range: time.Duration(numLitRange.Val * 1000) * time.Millisecond,
+                                Step:  time.Duration(numLitStep.Val * 1000) * time.Millisecond,
                                 EndPos: $6.Pos + 1,
                         }
                         }
-                | expr LEFT_BRACKET positive_duration_expr COLON RIGHT_BRACKET
-                        {
-                        var rangeNl time.Duration
-                        if numLit, ok := $3.(*NumberLiteral); ok {
-                                rangeNl = time.Duration(math.Round(numLit.Val*float64(time.Second)))
-                        }
-                        rangeExpr, _ := $3.(*DurationExpr)
-                        $$ = &SubqueryExpr{
-                                Expr:  $1.(Expr),
-                                Range: rangeNl,
-                                RangeExpr: rangeExpr,
-                                EndPos: $5.Pos + 1,
-                        }
-                        }
-                | expr LEFT_BRACKET positive_duration_expr COLON positive_duration_expr error
+                | expr LEFT_BRACKET number_duration_literal COLON RIGHT_BRACKET
+		        {
+		          numLitRange, _ := $3.(*NumberLiteral)
+		          $$ = &SubqueryExpr{
+		          Expr:  $1.(Expr),
+		          Range: time.Duration(numLitRange.Val * 1000) * time.Millisecond,
+		          Step:  0,
+		          EndPos: $5.Pos + 1,
+		          }
+		        }
+                | expr LEFT_BRACKET number_duration_literal COLON number_duration_literal error
                         { yylex.(*parser).unexpected("subquery selector", "\"]\""); $$ = $1 }
-                | expr LEFT_BRACKET positive_duration_expr COLON error
+                | expr LEFT_BRACKET number_duration_literal COLON error
                         { yylex.(*parser).unexpected("subquery selector", "number or duration or \"]\""); $$ = $1 }
-                | expr LEFT_BRACKET positive_duration_expr error
+                | expr LEFT_BRACKET number_duration_literal error
                         { yylex.(*parser).unexpected("subquery or range", "\":\" or \"]\""); $$ = $1 }
                 | expr LEFT_BRACKET error
 		        { yylex.(*parser).unexpected("subquery selector", "number or duration"); $$ = $1 }
@@ -700,13 +667,7 @@ label_set_list  : label_set_list COMMA label_set_item
 
 label_set_item  : IDENTIFIER EQL STRING
                         { $$ = labels.Label{Name: $1.Val, Value: yylex.(*parser).unquoteString($3.Val) } }
-                | string_identifier EQL STRING
-                        { $$ = labels.Label{Name: $1.Val, Value: yylex.(*parser).unquoteString($3.Val) } }
-                | string_identifier
-                        { $$ = labels.Label{Name: labels.MetricName, Value: $1.Val} }
                 | IDENTIFIER EQL error
-                        { yylex.(*parser).unexpected("label set", "string"); $$ = labels.Label{}}
-                | string_identifier EQL error
                         { yylex.(*parser).unexpected("label set", "string"); $$ = labels.Label{}}
                 | IDENTIFIER error
                         { yylex.(*parser).unexpected("label set", "\"=\""); $$ = labels.Label{}}
@@ -962,7 +923,6 @@ number_duration_literal  : NUMBER
                             $$ = &NumberLiteral{
 			            Val:      dur.Seconds(),
 			            PosRange: $1.PositionRange(),
-                                    Duration: true,
                             }
                         }
                 ;
@@ -1028,107 +988,6 @@ string_identifier  : STRING
 
 maybe_grouping_labels: /* empty */ { $$ = nil }
                 | grouping_labels
-                ;
-
-/*
- * Duration expressions.
- */
-
-duration_expr   : number_duration_literal
-                        {
-                        nl := $1.(*NumberLiteral)
-                        if nl.Val > 1<<63/1e9 || nl.Val < -(1<<63)/1e9 {
-                                yylex.(*parser).addParseErrf(nl.PosRange, "duration out of range")
-                                $$ = &NumberLiteral{Val: 0}
-                                break
-                        }
-                        $$ = nl
-                        }
-                | unary_op duration_expr %prec MUL
-                        {
-                        switch expr := $2.(type) {
-                        case *NumberLiteral:
-                                if $1.Typ == SUB {
-                                        expr.Val *= -1
-                                }
-                                if expr.Val > 1<<63/1e9 || expr.Val < -(1<<63)/1e9 {
-                                        yylex.(*parser).addParseErrf($1.PositionRange(), "duration out of range")
-                                        $$ = &NumberLiteral{Val: 0}
-                                        break
-                                }
-                                expr.PosRange.Start = $1.Pos
-                                $$ = expr
-                                break
-                        case *DurationExpr:
-                                if $1.Typ == SUB {
-                                        $$ = &DurationExpr{
-                                                Op: SUB,
-                                                RHS: expr,
-                                                StartPos: $1.Pos,
-                                        }
-                                        break
-                                }
-                                $$ = expr
-                                break
-                        default:
-                                yylex.(*parser).addParseErrf($1.PositionRange(), "expected number literal or duration expression")
-                                $$ = &NumberLiteral{Val: 0}
-                                break
-                        }
-                }
-                | duration_expr ADD duration_expr
-                        {
-                        yylex.(*parser).experimentalDurationExpr($1.(Expr))
-                        $$ = &DurationExpr{Op: ADD, LHS: $1.(Expr), RHS: $3.(Expr)}
-                        }
-                | duration_expr SUB duration_expr
-                        {
-                        yylex.(*parser).experimentalDurationExpr($1.(Expr))
-                        $$ = &DurationExpr{Op: SUB, LHS: $1.(Expr), RHS: $3.(Expr)}
-                        }
-                | duration_expr MUL duration_expr
-                        {
-                        yylex.(*parser).experimentalDurationExpr($1.(Expr))
-                        $$ = &DurationExpr{Op: MUL, LHS: $1.(Expr), RHS: $3.(Expr)}
-                        }
-                | duration_expr DIV duration_expr
-                        {
-                        yylex.(*parser).experimentalDurationExpr($1.(Expr))
-                        if nl, ok := $3.(*NumberLiteral); ok && nl.Val == 0 {
-                                yylex.(*parser).addParseErrf($2.PositionRange(), "division by zero")
-                                $$ = &NumberLiteral{Val: 0}
-                                break
-                        }
-                        $$ = &DurationExpr{Op: DIV, LHS: $1.(Expr), RHS: $3.(Expr)}
-                        }
-                | duration_expr MOD duration_expr
-                        {
-                        yylex.(*parser).experimentalDurationExpr($1.(Expr))
-                        if nl, ok := $3.(*NumberLiteral); ok && nl.Val == 0 {
-                            yylex.(*parser).addParseErrf($2.PositionRange(), "modulo by zero")
-                            $$ = &NumberLiteral{Val: 0}
-                            break
-                        }
-                        $$ = &DurationExpr{Op: MOD, LHS: $1.(Expr), RHS: $3.(Expr)}
-                        }
-                | duration_expr POW duration_expr
-                        {
-                            yylex.(*parser).experimentalDurationExpr($1.(Expr))
-                            $$ = &DurationExpr{Op: POW, LHS: $1.(Expr), RHS: $3.(Expr)}
-                        }
-                | paren_duration_expr
-                ;
-
-paren_duration_expr : LEFT_PAREN duration_expr RIGHT_PAREN
-                        { 
-                            yylex.(*parser).experimentalDurationExpr($2.(Expr))
-                            if durationExpr, ok := $2.(*DurationExpr); ok {
-                                durationExpr.Wrapped = true
-                                $$ = durationExpr
-                                break
-                            }
-                            $$ = $2 
-                        }
                 ;
 
 %%

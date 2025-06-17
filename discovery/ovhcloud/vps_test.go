@@ -21,10 +21,11 @@ import (
 	"os"
 	"testing"
 
-	"github.com/prometheus/common/model"
-	"github.com/prometheus/common/promslog"
-	"github.com/stretchr/testify/require"
 	yaml "gopkg.in/yaml.v2"
+
+	"github.com/go-kit/log"
+	"github.com/prometheus/common/model"
+	"github.com/stretchr/testify/require"
 )
 
 func TestOvhCloudVpsRefresh(t *testing.T) {
@@ -42,7 +43,7 @@ consumer_key: %s`, mock.URL, ovhcloudApplicationKeyTest, ovhcloudApplicationSecr
 
 	require.NoError(t, yaml.UnmarshalStrict([]byte(cfgString), &cfg))
 
-	d, err := newRefresher(&cfg, promslog.NewNopLogger())
+	d, err := newRefresher(&cfg, log.NewNopLogger())
 	require.NoError(t, err)
 	ctx := context.Background()
 	targetGroups, err := d.refresh(ctx)

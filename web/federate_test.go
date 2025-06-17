@@ -403,7 +403,7 @@ func TestFederationWithNativeHistograms(t *testing.T) {
 		}
 		require.NoError(t, err)
 		if et == textparse.EntryHistogram || et == textparse.EntrySeries {
-			p.Labels(&l)
+			p.Metric(&l)
 		}
 		switch et {
 		case textparse.EntryHelp:
