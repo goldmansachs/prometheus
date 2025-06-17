@@ -181,8 +181,7 @@ func TestFanoutErrors(t *testing.T) {
 				require.NotEmpty(t, ss.Warnings(), "warnings expected")
 				w := ss.Warnings()
 				require.Error(t, w.AsErrors()[0])
-				warn, _ := w.AsStrings("", 0, 0)
-				require.Equal(t, tc.warning.Error(), warn[0])
+				require.Equal(t, tc.warning.Error(), w.AsStrings("", 0)[0])
 			}
 		})
 		t.Run("chunks", func(t *testing.T) {
@@ -208,8 +207,7 @@ func TestFanoutErrors(t *testing.T) {
 				require.NotEmpty(t, ss.Warnings(), "warnings expected")
 				w := ss.Warnings()
 				require.Error(t, w.AsErrors()[0])
-				warn, _ := w.AsStrings("", 0, 0)
-				require.Equal(t, tc.warning.Error(), warn[0])
+				require.Equal(t, tc.warning.Error(), w.AsStrings("", 0)[0])
 			}
 		})
 	}
@@ -238,11 +236,11 @@ func (errQuerier) Select(context.Context, bool, *storage.SelectHints, ...*labels
 	return storage.ErrSeriesSet(errSelect)
 }
 
-func (errQuerier) LabelValues(context.Context, string, *storage.LabelHints, ...*labels.Matcher) ([]string, annotations.Annotations, error) {
+func (errQuerier) LabelValues(context.Context, string, ...*labels.Matcher) ([]string, annotations.Annotations, error) {
 	return nil, nil, errors.New("label values error")
 }
 
-func (errQuerier) LabelNames(context.Context, *storage.LabelHints, ...*labels.Matcher) ([]string, annotations.Annotations, error) {
+func (errQuerier) LabelNames(context.Context, ...*labels.Matcher) ([]string, annotations.Annotations, error) {
 	return nil, nil, errors.New("label names error")
 }
 

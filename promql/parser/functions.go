@@ -223,13 +223,6 @@ var Functions = map[string]*Function{
 		ArgTypes:   []ValueType{ValueTypeMatrix},
 		ReturnType: ValueTypeVector,
 	},
-	"info": {
-		Name:         "info",
-		ArgTypes:     []ValueType{ValueTypeVector, ValueTypeVector},
-		ReturnType:   ValueTypeVector,
-		Experimental: true,
-		Variadic:     1,
-	},
 	"irate": {
 		Name:       "irate",
 		ArgTypes:   []ValueType{ValueTypeMatrix},
@@ -429,11 +422,6 @@ var Functions = map[string]*Function{
 		ArgTypes:   []ValueType{ValueTypeVector},
 		Variadic:   1,
 		ReturnType: ValueTypeVector,
-	},
-	"gs_prometheus_start_time": {
-		Name:       "gs_prometheus_start_time",
-		ArgTypes:   []ValueType{},
-		ReturnType: ValueTypeScalar,
 	},
 }
 

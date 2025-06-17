@@ -24,11 +24,6 @@ import (
 // multiError type allows combining multiple errors into one.
 type multiError []error
 
-// MultiError provide back compatibility
-type MultiError struct {
-	multiError
-}
-
 // NewMulti returns multiError with provided errors added if not nil.
 func NewMulti(errs ...error) multiError { //nolint:revive // unexported-return.
 	m := multiError{}

@@ -49,6 +49,7 @@ import (
 	toolkit_web "github.com/prometheus/exporter-toolkit/web"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.uber.org/atomic"
+	"golang.org/x/net/netutil"
 
 	"github.com/prometheus/prometheus/config"
 	"github.com/prometheus/prometheus/notifier"
@@ -58,7 +59,6 @@ import (
 	"github.com/prometheus/prometheus/storage"
 	"github.com/prometheus/prometheus/template"
 	"github.com/prometheus/prometheus/util/httputil"
-	"github.com/prometheus/prometheus/util/netconnlimit"
 	api_v1 "github.com/prometheus/prometheus/web/api/v1"
 	"github.com/prometheus/prometheus/web/ui"
 )
@@ -244,7 +244,7 @@ type Options struct {
 	Version               *PrometheusVersion
 	Flags                 map[string]string
 
-	ListenAddresses            []string
+	ListenAddress              string
 	CORSOrigin                 *regexp.Regexp
 	ReadTimeout                time.Duration
 	MaxConnections             int
@@ -264,8 +264,6 @@ type Options struct {
 	EnableOTLPWriteReceiver    bool
 	IsAgent                    bool
 	AppName                    string
-
-	AcceptRemoteWriteProtoMsgs []config.RemoteWriteProtoMsg
 
 	Gatherer   prometheus.Gatherer
 	Registerer prometheus.Registerer
@@ -334,7 +332,7 @@ func New(logger log.Logger, o *Options) *Handler {
 		},
 		o.Flags,
 		api_v1.GlobalURLOptions{
-			ListenAddress: o.ListenAddresses[0],
+			ListenAddress: o.ListenAddress,
 			Host:          o.ExternalURL.Host,
 			Scheme:        o.ExternalURL.Scheme,
 		},
@@ -355,7 +353,6 @@ func New(logger log.Logger, o *Options) *Handler {
 		o.Registerer,
 		nil,
 		o.EnableRemoteWriteReceiver,
-		o.AcceptRemoteWriteProtoMsgs,
 		o.EnableOTLPWriteReceiver,
 	)
 
@@ -481,14 +478,14 @@ func New(logger log.Logger, o *Options) *Handler {
 
 	router.Get("/-/healthy", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		fmt.Fprintf(w, "%s is Healthy.\n", o.AppName)
+		fmt.Fprintf(w, o.AppName+" is Healthy.\n")
 	})
 	router.Head("/-/healthy", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
 	router.Get("/-/ready", readyf(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		fmt.Fprintf(w, "%s is Ready.\n", o.AppName)
+		fmt.Fprintf(w, o.AppName+" is Ready.\n")
 	}))
 	router.Head("/-/ready", readyf(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -566,29 +563,15 @@ func (h *Handler) Reload() <-chan chan error {
 	return h.reloadCh
 }
 
-// Listeners creates the TCP listeners for web requests.
-func (h *Handler) Listeners() ([]net.Listener, error) {
-	var listeners []net.Listener
-	sem := netconnlimit.NewSharedSemaphore(h.options.MaxConnections)
-	for _, address := range h.options.ListenAddresses {
-		listener, err := h.Listener(address, sem)
-		if err != nil {
-			return listeners, err
-		}
-		listeners = append(listeners, listener)
-	}
-	return listeners, nil
-}
-
 // Listener creates the TCP listener for web requests.
-func (h *Handler) Listener(address string, sem chan struct{}) (net.Listener, error) {
-	level.Info(h.logger).Log("msg", "Start listening for connections", "address", address)
+func (h *Handler) Listener() (net.Listener, error) {
+	level.Info(h.logger).Log("msg", "Start listening for connections", "address", h.options.ListenAddress)
 
-	listener, err := net.Listen("tcp", address)
+	listener, err := net.Listen("tcp", h.options.ListenAddress)
 	if err != nil {
 		return listener, err
 	}
-	listener = netconnlimit.SharedLimitListener(listener, sem)
+	listener = netutil.LimitListener(listener, h.options.MaxConnections)
 
 	// Monitor incoming connections with conntrack.
 	listener = conntrack.NewListener(listener,
@@ -599,10 +582,10 @@ func (h *Handler) Listener(address string, sem chan struct{}) (net.Listener, err
 }
 
 // Run serves the HTTP endpoints.
-func (h *Handler) Run(ctx context.Context, listeners []net.Listener, webConfig string) error {
-	if len(listeners) == 0 {
+func (h *Handler) Run(ctx context.Context, listener net.Listener, webConfig string) error {
+	if listener == nil {
 		var err error
-		listeners, err = h.Listeners()
+		listener, err = h.Listener()
 		if err != nil {
 			return err
 		}
@@ -637,7 +620,7 @@ func (h *Handler) Run(ctx context.Context, listeners []net.Listener, webConfig s
 
 	errCh := make(chan error, 1)
 	go func() {
-		errCh <- toolkit_web.ServeMultiple(listeners, httpSrv, &toolkit_web.FlagConfig{WebConfigFile: &webConfig}, h.logger)
+		errCh <- toolkit_web.Serve(listener, httpSrv, &toolkit_web.FlagConfig{WebConfigFile: &webConfig}, h.logger)
 	}()
 
 	select {

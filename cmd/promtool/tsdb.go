@@ -33,7 +33,6 @@ import (
 
 	"github.com/alecthomas/units"
 	"github.com/go-kit/log"
-	"go.uber.org/atomic"
 
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/promql/parser"
@@ -150,7 +149,8 @@ func benchmarkWrite(outPath, samplesFile string, numMetrics, numScrapes int) err
 }
 
 func (b *writeBenchmark) ingestScrapes(lbls []labels.Labels, scrapeCount int) (uint64, error) {
-	var total atomic.Uint64
+	var mu sync.Mutex
+	var total uint64
 
 	for i := 0; i < scrapeCount; i += 100 {
 		var wg sync.WaitGroup
@@ -165,21 +165,22 @@ func (b *writeBenchmark) ingestScrapes(lbls []labels.Labels, scrapeCount int) (u
 
 			wg.Add(1)
 			go func() {
-				defer wg.Done()
-
 				n, err := b.ingestScrapesShard(batch, 100, int64(timeDelta*i))
 				if err != nil {
 					// exitWithError(err)
 					fmt.Println(" err", err)
 				}
-				total.Add(n)
+				mu.Lock()
+				total += n
+				mu.Unlock()
+				wg.Done()
 			}()
 		}
 		wg.Wait()
 	}
 	fmt.Println("ingestion completed")
 
-	return total.Load(), nil
+	return total, nil
 }
 
 func (b *writeBenchmark) ingestScrapesShard(lbls []labels.Labels, scrapeCount int, baset int64) (uint64, error) {
@@ -338,7 +339,7 @@ func readPrometheusLabels(r io.Reader, n int) ([]labels.Labels, error) {
 }
 
 func listBlocks(path string, humanReadable bool) error {
-	db, err := tsdb.OpenDBReadOnly(path, "", nil)
+	db, err := tsdb.OpenDBReadOnly(path, nil)
 	if err != nil {
 		return err
 	}
@@ -393,7 +394,7 @@ func getFormatedBytes(bytes int64, humanReadable bool) string {
 }
 
 func openBlock(path, blockID string) (*tsdb.DBReadOnly, tsdb.BlockReader, error) {
-	db, err := tsdb.OpenDBReadOnly(path, "", nil)
+	db, err := tsdb.OpenDBReadOnly(path, nil)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -708,8 +709,8 @@ func analyzeCompaction(ctx context.Context, block tsdb.BlockReader, indexr tsdb.
 
 type SeriesSetFormatter func(series storage.SeriesSet) error
 
-func dumpSamples(ctx context.Context, dbDir, sandboxDirRoot string, mint, maxt int64, match []string, formatter SeriesSetFormatter) (err error) {
-	db, err := tsdb.OpenDBReadOnly(dbDir, sandboxDirRoot, nil)
+func dumpSamples(ctx context.Context, path string, mint, maxt int64, match []string, formatter SeriesSetFormatter) (err error) {
+	db, err := tsdb.OpenDBReadOnly(path, nil)
 	if err != nil {
 		return err
 	}
@@ -823,7 +824,7 @@ func checkErr(err error) int {
 	return 0
 }
 
-func backfillOpenMetrics(path, outputDir string, humanReadable, quiet bool, maxBlockDuration time.Duration, customLabels map[string]string) int {
+func backfillOpenMetrics(path, outputDir string, humanReadable, quiet bool, maxBlockDuration time.Duration) int {
 	inputFile, err := fileutil.OpenMmapFile(path)
 	if err != nil {
 		return checkErr(err)
@@ -834,14 +835,10 @@ func backfillOpenMetrics(path, outputDir string, humanReadable, quiet bool, maxB
 		return checkErr(fmt.Errorf("create output dir: %w", err))
 	}
 
-	return checkErr(backfill(5000, inputFile.Bytes(), outputDir, humanReadable, quiet, maxBlockDuration, customLabels))
+	return checkErr(backfill(5000, inputFile.Bytes(), outputDir, humanReadable, quiet, maxBlockDuration))
 }
 
 func displayHistogram(dataType string, datas []int, total int) {
-	if len(datas) == 0 {
-		fmt.Printf("%s: N/A\n\n", dataType)
-		return
-	}
 	slices.Sort(datas)
 	start, end, step := generateBucket(datas[0], datas[len(datas)-1])
 	sum := 0
@@ -856,9 +853,9 @@ func displayHistogram(dataType string, datas []int, total int) {
 	}
 	avg := sum / len(datas)
 	fmt.Printf("%s (min/avg/max): %d/%d/%d\n", dataType, datas[0], avg, datas[len(datas)-1])
-	maxLeftLen := strconv.Itoa(len(strconv.Itoa(end)))
-	maxRightLen := strconv.Itoa(len(strconv.Itoa(end + step)))
-	maxCountLen := strconv.Itoa(len(strconv.Itoa(maxCount)))
+	maxLeftLen := strconv.Itoa(len(fmt.Sprintf("%d", end)))
+	maxRightLen := strconv.Itoa(len(fmt.Sprintf("%d", end+step)))
+	maxCountLen := strconv.Itoa(len(fmt.Sprintf("%d", maxCount)))
 	for bucket, count := range buckets {
 		percentage := 100.0 * count / total
 		fmt.Printf("[%"+maxLeftLen+"d, %"+maxRightLen+"d]: %"+maxCountLen+"d %s\n", bucket*step+start+1, (bucket+1)*step+start, count, strings.Repeat("#", percentage))
@@ -866,16 +863,16 @@ func displayHistogram(dataType string, datas []int, total int) {
 	fmt.Println()
 }
 
-func generateBucket(minVal, maxVal int) (start, end, step int) {
-	s := (maxVal - minVal) / 10
+func generateBucket(min, max int) (start, end, step int) {
+	s := (max - min) / 10
 
 	step = 10
 	for step < s && step <= 10000 {
 		step *= 10
 	}
 
-	start = minVal - minVal%step
-	end = maxVal - maxVal%step + step
+	start = min - min%step
+	end = max - max%step + step
 
 	return
 }

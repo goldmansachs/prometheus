@@ -112,9 +112,9 @@ func (ls Labels) HashForLabels(b []byte, names ...string) (uint64, []byte) {
 		}
 		if name == names[j] {
 			b = append(b, name...)
-			b = append(b, sep)
+			b = append(b, seps[0])
 			b = append(b, value...)
-			b = append(b, sep)
+			b = append(b, seps[0])
 		}
 	}
 
@@ -138,9 +138,9 @@ func (ls Labels) HashWithoutLabels(b []byte, names ...string) (uint64, []byte) {
 			continue
 		}
 		b = append(b, name...)
-		b = append(b, sep)
+		b = append(b, seps[0])
 		b = append(b, value...)
-		b = append(b, sep)
+		b = append(b, seps[0])
 	}
 	return xxhash.Sum64(b), b
 }
@@ -299,6 +299,11 @@ func Equal(ls, o Labels) bool {
 func EmptyLabels() Labels {
 	return Labels{}
 }
+
+func yoloString(b []byte) string {
+	return *((*string)(unsafe.Pointer(&b)))
+}
+
 func yoloBytes(s string) (b []byte) {
 	*(*string)(unsafe.Pointer(&b)) = s
 	(*reflect.SliceHeader)(unsafe.Pointer(&b)).Cap = len(s)
@@ -358,11 +363,13 @@ func Compare(a, b Labels) int {
 
 	// Now we know that there is some difference before the end of a and b.
 	// Go back through the fields and find which field that difference is in.
-	firstCharDifferent, i := i, 0
-	size, nextI := decodeSize(a.data, i)
-	for nextI+size <= firstCharDifferent {
+	firstCharDifferent := i
+	for i = 0; ; {
+		size, nextI := decodeSize(a.data, i)
+		if nextI+size > firstCharDifferent {
+			break
+		}
 		i = nextI + size
-		size, nextI = decodeSize(a.data, i)
 	}
 	// Difference is inside this entry.
 	aStr, _ := decodeString(a.data, i)

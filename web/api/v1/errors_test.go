@@ -32,7 +32,6 @@ import (
 	"github.com/prometheus/prometheus/config"
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/promql"
-	"github.com/prometheus/prometheus/promql/promqltest"
 	"github.com/prometheus/prometheus/rules"
 	"github.com/prometheus/prometheus/scrape"
 	"github.com/prometheus/prometheus/storage"
@@ -87,10 +86,10 @@ func TestApiStatusCodes(t *testing.T) {
 			"error from seriesset": errorTestQueryable{q: errorTestQuerier{s: errorTestSeriesSet{err: tc.err}}},
 		} {
 			t.Run(fmt.Sprintf("%s/%s", name, k), func(t *testing.T) {
-				r := createPrometheusAPI(t, q)
+				r := createPrometheusAPI(q)
 				rec := httptest.NewRecorder()
 
-				req := httptest.NewRequest(http.MethodGet, "/api/v1/query?query=up", nil)
+				req := httptest.NewRequest("GET", "/api/v1/query?query=up", nil)
 
 				r.ServeHTTP(rec, req)
 
@@ -101,10 +100,8 @@ func TestApiStatusCodes(t *testing.T) {
 	}
 }
 
-func createPrometheusAPI(t *testing.T, q storage.SampleAndChunkQueryable) *route.Router {
-	t.Helper()
-
-	engine := promqltest.NewTestEngineWithOpts(t, promql.EngineOpts{
+func createPrometheusAPI(q storage.SampleAndChunkQueryable) *route.Router {
+	engine := promql.NewEngine(promql.EngineOpts{
 		Logger:             log.NewNopLogger(),
 		Reg:                nil,
 		ActiveQueryTracker: nil,
@@ -138,7 +135,6 @@ func createPrometheusAPI(t *testing.T, q storage.SampleAndChunkQueryable) *route
 		nil,
 		nil,
 		false,
-		config.RemoteWriteProtoMsgs{config.RemoteWriteProtoMsgV1, config.RemoteWriteProtoMsgV2},
 		false,
 	)
 
@@ -174,11 +170,11 @@ type errorTestQuerier struct {
 	err error
 }
 
-func (t errorTestQuerier) LabelValues(context.Context, string, *storage.LabelHints, ...*labels.Matcher) ([]string, annotations.Annotations, error) {
+func (t errorTestQuerier) LabelValues(context.Context, string, ...*labels.Matcher) ([]string, annotations.Annotations, error) {
 	return nil, nil, t.err
 }
 
-func (t errorTestQuerier) LabelNames(context.Context, *storage.LabelHints, ...*labels.Matcher) ([]string, annotations.Annotations, error) {
+func (t errorTestQuerier) LabelNames(context.Context, ...*labels.Matcher) ([]string, annotations.Annotations, error) {
 	return nil, nil, t.err
 }
 

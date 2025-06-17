@@ -13,12 +13,7 @@
 
 package testutil
 
-import (
-	"context"
-	"time"
-
-	"go.uber.org/atomic"
-)
+import "time"
 
 // A MockContext provides a simple stub implementation of a Context.
 type MockContext struct {
@@ -44,24 +39,4 @@ func (c *MockContext) Err() error {
 // Value ignores the Value and always returns nil.
 func (c *MockContext) Value(interface{}) interface{} {
 	return nil
-}
-
-// MockContextErrAfter is a MockContext that will return an error after a certain
-// number of calls to Err().
-type MockContextErrAfter struct {
-	MockContext
-	count     atomic.Uint64
-	FailAfter uint64
-}
-
-func (c *MockContextErrAfter) Err() error {
-	c.count.Inc()
-	if c.count.Load() >= c.FailAfter {
-		return context.Canceled
-	}
-	return c.MockContext.Err()
-}
-
-func (c *MockContextErrAfter) Count() uint64 {
-	return c.count.Load()
 }

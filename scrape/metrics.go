@@ -20,7 +20,6 @@ import (
 )
 
 type scrapeMetrics struct {
-	reg prometheus.Registerer
 	// Used by Manager.
 	targetMetadataCache     *MetadataMetricsCollector
 	targetScrapePools       prometheus.Counter
@@ -34,7 +33,6 @@ type scrapeMetrics struct {
 	targetScrapePoolExceededTargetLimit prometheus.Counter
 	targetScrapePoolTargetLimit         *prometheus.GaugeVec
 	targetScrapePoolTargetsAdded        *prometheus.GaugeVec
-	targetScrapePoolSymbolTableItems    *prometheus.GaugeVec
 	targetSyncIntervalLength            *prometheus.SummaryVec
 	targetSyncFailed                    *prometheus.CounterVec
 
@@ -56,7 +54,7 @@ type scrapeMetrics struct {
 }
 
 func newScrapeMetrics(reg prometheus.Registerer) (*scrapeMetrics, error) {
-	sm := &scrapeMetrics{reg: reg}
+	sm := &scrapeMetrics{}
 
 	// Manager metrics.
 	sm.targetMetadataCache = &MetadataMetricsCollector{
@@ -127,13 +125,6 @@ func newScrapeMetrics(reg prometheus.Registerer) (*scrapeMetrics, error) {
 		prometheus.GaugeOpts{
 			Name: "prometheus_target_scrape_pool_targets",
 			Help: "Current number of targets in this scrape pool.",
-		},
-		[]string{"scrape_job"},
-	)
-	sm.targetScrapePoolSymbolTableItems = prometheus.NewGaugeVec(
-		prometheus.GaugeOpts{
-			Name: "prometheus_target_scrape_pool_symboltable_items",
-			Help: "Current number of symbols in table for this scrape pool.",
 		},
 		[]string{"scrape_job"},
 	)
@@ -242,7 +233,6 @@ func newScrapeMetrics(reg prometheus.Registerer) (*scrapeMetrics, error) {
 		sm.targetScrapePoolExceededTargetLimit,
 		sm.targetScrapePoolTargetLimit,
 		sm.targetScrapePoolTargetsAdded,
-		sm.targetScrapePoolSymbolTableItems,
 		sm.targetSyncFailed,
 		// Used by targetScraper.
 		sm.targetScrapeExceededBodySizeLimit,
@@ -268,33 +258,6 @@ func newScrapeMetrics(reg prometheus.Registerer) (*scrapeMetrics, error) {
 
 func (sm *scrapeMetrics) setTargetMetadataCacheGatherer(gatherer TargetsGatherer) {
 	sm.targetMetadataCache.TargetsGatherer = gatherer
-}
-
-// Unregister unregisters all metrics.
-func (sm *scrapeMetrics) Unregister() {
-	sm.reg.Unregister(sm.targetMetadataCache)
-	sm.reg.Unregister(sm.targetScrapePools)
-	sm.reg.Unregister(sm.targetScrapePoolsFailed)
-	sm.reg.Unregister(sm.targetReloadIntervalLength)
-	sm.reg.Unregister(sm.targetScrapePoolReloads)
-	sm.reg.Unregister(sm.targetScrapePoolReloadsFailed)
-	sm.reg.Unregister(sm.targetSyncIntervalLength)
-	sm.reg.Unregister(sm.targetScrapePoolSyncsCounter)
-	sm.reg.Unregister(sm.targetScrapePoolExceededTargetLimit)
-	sm.reg.Unregister(sm.targetScrapePoolTargetLimit)
-	sm.reg.Unregister(sm.targetScrapePoolTargetsAdded)
-	sm.reg.Unregister(sm.targetScrapePoolSymbolTableItems)
-	sm.reg.Unregister(sm.targetSyncFailed)
-	sm.reg.Unregister(sm.targetScrapeExceededBodySizeLimit)
-	sm.reg.Unregister(sm.targetScrapeCacheFlushForced)
-	sm.reg.Unregister(sm.targetIntervalLength)
-	sm.reg.Unregister(sm.targetScrapeSampleLimit)
-	sm.reg.Unregister(sm.targetScrapeSampleDuplicate)
-	sm.reg.Unregister(sm.targetScrapeSampleOutOfOrder)
-	sm.reg.Unregister(sm.targetScrapeSampleOutOfBounds)
-	sm.reg.Unregister(sm.targetScrapeExemplarOutOfOrder)
-	sm.reg.Unregister(sm.targetScrapePoolExceededLabelLimits)
-	sm.reg.Unregister(sm.targetScrapeNativeHistogramBucketLimit)
 }
 
 type TargetsGatherer interface {

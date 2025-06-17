@@ -1,3 +1,0 @@
-  bazel run :gazelle-update-repos
-  bazel run //:gazelle
-  bazel build cmd/prometheus:prometheus

@@ -1,1 +1,0 @@
-../../util/runtime/vmlimits_openbsd.go

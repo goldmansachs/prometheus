@@ -15,9 +15,9 @@ package moby
 
 import (
 	"context"
-	"strconv"
+	"fmt"
 
-	"github.com/docker/docker/api/types/network"
+	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/client"
 
 	"github.com/prometheus/prometheus/util/strutil"
@@ -34,7 +34,7 @@ const (
 )
 
 func getNetworksLabels(ctx context.Context, client *client.Client, labelPrefix string) (map[string]map[string]string, error) {
-	networks, err := client.NetworkList(ctx, network.ListOptions{})
+	networks, err := client.NetworkList(ctx, types.NetworkListOptions{})
 	if err != nil {
 		return nil, err
 	}
@@ -44,8 +44,8 @@ func getNetworksLabels(ctx context.Context, client *client.Client, labelPrefix s
 			labelPrefix + labelNetworkID:       network.ID,
 			labelPrefix + labelNetworkName:     network.Name,
 			labelPrefix + labelNetworkScope:    network.Scope,
-			labelPrefix + labelNetworkInternal: strconv.FormatBool(network.Internal),
-			labelPrefix + labelNetworkIngress:  strconv.FormatBool(network.Ingress),
+			labelPrefix + labelNetworkInternal: fmt.Sprintf("%t", network.Internal),
+			labelPrefix + labelNetworkIngress:  fmt.Sprintf("%t", network.Ingress),
 		}
 		for k, v := range network.Labels {
 			ln := strutil.SanitizeLabelName(k)

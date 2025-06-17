@@ -21,7 +21,6 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"os"
-	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -68,7 +67,7 @@ func TestTargetOffset(t *testing.T) {
 	// Calculate offsets for 10000 different targets.
 	for i := range offsets {
 		target := newTestTarget("example.com:80", 0, labels.FromStrings(
-			"label", strconv.Itoa(i),
+			"label", fmt.Sprintf("%d", i),
 		))
 		offsets[i] = target.offset(interval, offsetSeed)
 	}
@@ -474,17 +473,6 @@ func TestBucketLimitAppender(t *testing.T) {
 		PositiveBuckets: []int64{1, 0}, // 1, 1
 	}
 
-	customBuckets := histogram.Histogram{
-		Schema: histogram.CustomBucketsSchema,
-		Count:  9,
-		Sum:    33,
-		PositiveSpans: []histogram.Span{
-			{Offset: 0, Length: 3},
-		},
-		PositiveBuckets: []int64{3, 0, 0},
-		CustomValues:    []float64{1, 2, 3},
-	}
-
 	cases := []struct {
 		h                 histogram.Histogram
 		limit             int
@@ -517,18 +505,6 @@ func TestBucketLimitAppender(t *testing.T) {
 			expectError:       false,
 			expectBucketCount: 1,
 			expectSchema:      -2,
-		},
-		{
-			h:           customBuckets,
-			limit:       2,
-			expectError: true,
-		},
-		{
-			h:                 customBuckets,
-			limit:             3,
-			expectError:       false,
-			expectBucketCount: 3,
-			expectSchema:      histogram.CustomBucketsSchema,
 		},
 	}
 
@@ -585,17 +561,6 @@ func TestMaxSchemaAppender(t *testing.T) {
 		NegativeBuckets: []int64{3, 0, 0},
 	}
 
-	customBuckets := histogram.Histogram{
-		Schema: histogram.CustomBucketsSchema,
-		Count:  9,
-		Sum:    33,
-		PositiveSpans: []histogram.Span{
-			{Offset: 0, Length: 3},
-		},
-		PositiveBuckets: []int64{3, 0, 0},
-		CustomValues:    []float64{1, 2, 3},
-	}
-
 	cases := []struct {
 		h            histogram.Histogram
 		maxSchema    int32
@@ -610,11 +575,6 @@ func TestMaxSchemaAppender(t *testing.T) {
 			h:            example,
 			maxSchema:    0,
 			expectSchema: 0,
-		},
-		{
-			h:            customBuckets,
-			maxSchema:    -1,
-			expectSchema: histogram.CustomBucketsSchema,
 		},
 	}
 
@@ -632,6 +592,7 @@ func TestMaxSchemaAppender(t *testing.T) {
 					_, err = app.AppendHistogram(0, lbls, ts, nil, fh)
 					require.Equal(t, c.expectSchema, fh.Schema)
 					require.NoError(t, err)
+
 				} else {
 					h := c.h.Copy()
 					_, err = app.AppendHistogram(0, lbls, ts, h, nil)

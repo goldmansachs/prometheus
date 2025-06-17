@@ -29,7 +29,7 @@ expr[@isGroup=Expr] {
   BinaryExpr |
   FunctionCall |
   MatrixSelector |
-  NumberDurationLiteral |
+  NumberLiteral |
   OffsetExpr |
   ParenExpr |
   StringLiteral |
@@ -54,8 +54,6 @@ AggregateOp {
   Max |
   Min |
   Quantile |
-  LimitK |
-  LimitRatio |
   Stddev |
   Stdvar |
   Sum |
@@ -99,7 +97,7 @@ binModifiers {
 }
 
 GroupingLabels {
-  "(" ((LabelName | QuotedLabelName) ("," (LabelName | QuotedLabelName))* ","?)? ")"
+  "(" (LabelName ("," LabelName)* ","?)? ")"
 }
 
 FunctionCall {
@@ -145,7 +143,6 @@ FunctionIdentifier {
   Hour |
   Idelta |
   Increase |
-  Info |
   Irate |
   LabelReplace |
   LabelJoin |
@@ -195,16 +192,16 @@ ParenExpr {
 }
 
 OffsetExpr {
-  expr Offset NumberDurationLiteralInDurationContext
+  expr Offset Sub? Duration
 }
 
 MatrixSelector {
   // TODO: Can this not be more specific than "expr"?
-  expr "[" NumberDurationLiteralInDurationContext "]"
+  expr "[" Duration "]"
 }
 
 SubqueryExpr {
-  expr "[" NumberDurationLiteralInDurationContext ":" ("" | NumberDurationLiteralInDurationContext) "]"
+  expr "[" Duration ":" ("" | Duration) "]"
 }
 
 UnaryExpr {
@@ -223,7 +220,7 @@ VectorSelector {
 }
 
 LabelMatchers {
-  "{" ((UnquotedLabelMatcher | QuotedLabelMatcher | QuotedLabelName)("," (UnquotedLabelMatcher | QuotedLabelMatcher | QuotedLabelName))* ","?)? "}"
+  "{" (LabelMatcher ("," LabelMatcher)* ","?)? "}"
 }
 
 MatchOp {
@@ -233,31 +230,19 @@ MatchOp {
   NeqRegex
 }
 
-UnquotedLabelMatcher {
-    LabelName MatchOp StringLiteral
-}
-
-QuotedLabelMatcher {
-    QuotedLabelName MatchOp StringLiteral
-}
-
-QuotedLabelName {
-    StringLiteral
+LabelMatcher {
+  LabelName MatchOp StringLiteral
 }
 
 StepInvariantExpr {
-  expr At ( NumberDurationLiteral | AtModifierPreprocessors "(" ")" )
+  expr At ( NumberLiteral | AtModifierPreprocessors "(" ")" )
 }
 
 AtModifierPreprocessors {
   Start | End
 }
 
-NumberDurationLiteral  {
- ("-"|"+")?~signed (number | inf | nan)
-}
-
-NumberDurationLiteralInDurationContext {
+NumberLiteral  {
  ("-"|"+")?~signed (number | inf | nan)
 }
 
@@ -268,8 +253,8 @@ NumberDurationLiteralInDurationContext {
   LineComment { "#" ![\n]* }
 
   number {
-      (std.digit+ (("_")? std.digit)* ("." std.digit+ (("_")? std.digit)*)? | "." std.digit+ (("_")? std.digit)*) (("e" | "E") ("+" | "-")? std.digit+ (("_")? std.digit)*)? |
-      "0x" (std.digit | $[a-fA-F])+ | duration
+      (std.digit+ ("." std.digit*)? | "." std.digit+) (("e" | "E") ("+" | "-")? std.digit+)? |
+      "0x" (std.digit | $[a-fA-F])+
   }
   StringLiteral { // TODO: This is for JS, make this work for PromQL.
     '"' (![\\\n"] | "\\" _)* '"'? |
@@ -277,7 +262,7 @@ NumberDurationLiteralInDurationContext {
     "`" ![`]* "`"
   }
 
-  duration {
+  Duration {
     // Each line below is just the same regex repeated over and over, but each time with one of the units made non-optional,
     // to ensure that at least one <number>+<unit> pair is provided and an empty string is not recognized as a valid duration.
     ( ( std.digit+ "y" ) ( std.digit+ "w" )? ( std.digit+ "d" )? ( std.digit+ "h" )? ( std.digit+ "m" )? ( std.digit+ "s" )? ( std.digit+ "ms" )? ) |
@@ -337,8 +322,6 @@ NumberDurationLiteralInDurationContext {
   Max,
   Min,
   Quantile,
-  LimitK,
-  LimitRatio,
   Stddev,
   Stdvar,
   Sum,
@@ -393,7 +376,6 @@ NumberDurationLiteralInDurationContext {
   Hour { condFn<"hour"> }
   Idelta { condFn<"idelta"> }
   Increase { condFn<"increase"> }
-  Info { condFn<"info"> }
   Irate { condFn<"irate"> }
   LabelReplace { condFn<"label_replace"> }
   LabelJoin { condFn<"label_join"> }

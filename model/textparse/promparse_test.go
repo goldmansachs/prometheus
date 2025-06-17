@@ -18,7 +18,6 @@ import (
 	"errors"
 	"io"
 	"os"
-	"strings"
 	"testing"
 
 	"github.com/klauspost/compress/gzip"
@@ -42,7 +41,6 @@ type expectedParse struct {
 	unit    string
 	comment string
 	e       *exemplar.Exemplar
-	ct      *int64
 }
 
 func TestPromParse(t *testing.T) {
@@ -190,10 +188,6 @@ testmetric{label="\"bar\""} 1`
 }
 
 func checkParseResults(t *testing.T, p Parser, exp []expectedParse) {
-	checkParseResultsWithCT(t, p, exp, false)
-}
-
-func checkParseResultsWithCT(t *testing.T, p Parser, exp []expectedParse, ctLinesRemoved bool) {
 	i := 0
 
 	var res labels.Labels
@@ -211,14 +205,6 @@ func checkParseResultsWithCT(t *testing.T, p Parser, exp []expectedParse, ctLine
 
 			p.Metric(&res)
 
-			if ctLinesRemoved {
-				// Are CT series skipped?
-				_, typ := p.Type()
-				if TypeRequiresCT(typ) && strings.HasSuffix(res.Get(labels.MetricName), "_created") {
-					t.Fatalf("we exped created lines skipped")
-				}
-			}
-
 			require.Equal(t, exp[i].m, string(m))
 			require.Equal(t, exp[i].t, ts)
 			require.Equal(t, exp[i].v, v)
@@ -231,11 +217,6 @@ func checkParseResultsWithCT(t *testing.T, p Parser, exp []expectedParse, ctLine
 			} else {
 				require.True(t, found)
 				testutil.RequireEqual(t, *exp[i].e, e)
-			}
-			if ct := p.CreatedTimestamp(); ct != nil {
-				require.Equal(t, *exp[i].ct, *ct)
-			} else {
-				require.Nil(t, exp[i].ct)
 			}
 
 		case EntryType:
@@ -494,10 +475,8 @@ const (
 
 func BenchmarkParse(b *testing.B) {
 	for parserName, parser := range map[string]func([]byte, *labels.SymbolTable) Parser{
-		"prometheus": NewPromParser,
-		"openmetrics": func(b []byte, st *labels.SymbolTable) Parser {
-			return NewOpenMetricsParser(b, st)
-		},
+		"prometheus":  NewPromParser,
+		"openmetrics": NewOpenMetricsParser,
 	} {
 		for _, fn := range []string{"promtestdata.txt", "promtestdata.nometa.txt"} {
 			f, err := os.Open(fn)

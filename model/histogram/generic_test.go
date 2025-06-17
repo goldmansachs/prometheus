@@ -21,7 +21,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestGetBoundExponential(t *testing.T) {
+func TestGetBound(t *testing.T) {
 	scenarios := []struct {
 		idx    int32
 		schema int32
@@ -105,7 +105,7 @@ func TestGetBoundExponential(t *testing.T) {
 	}
 
 	for _, s := range scenarios {
-		got := getBoundExponential(s.idx, s.schema)
+		got := getBound(s.idx, s.schema)
 		if s.want != got {
 			require.Equal(t, s.want, got, "idx %d, schema %d", s.idx, s.schema)
 		}

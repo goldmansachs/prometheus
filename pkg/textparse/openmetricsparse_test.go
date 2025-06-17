@@ -1,1 +1,0 @@
-../../model/textparse/openmetricsparse_test.go

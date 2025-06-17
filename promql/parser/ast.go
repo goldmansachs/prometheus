@@ -198,19 +198,14 @@ type VectorSelector struct {
 	// Offset is the offset used during the query execution
 	// which is calculated using the original offset, at modifier time,
 	// eval time, and subquery offsets in the AST tree.
-	Offset               time.Duration
-	Timestamp            *int64
-	SkipHistogramBuckets bool     // Set when decoding native histogram buckets is not needed for query evaluation.
-	StartOrEnd           ItemType // Set when @ is used with start() or end()
-	LabelMatchers        []*labels.Matcher
+	Offset        time.Duration
+	Timestamp     *int64
+	StartOrEnd    ItemType // Set when @ is used with start() or end()
+	LabelMatchers []*labels.Matcher
 
 	// The unexpanded seriesSet populated at query preparation time.
 	UnexpandedSeriesSet storage.SeriesSet
 	Series              []storage.Series
-
-	// BypassEmptyMatcherCheck is true when the VectorSelector isn't required to have at least one matcher matching the empty string.
-	// This is the case when VectorSelector is used to represent the info function's second argument.
-	BypassEmptyMatcherCheck bool
 
 	PosRange posrange.PositionRange
 }
@@ -356,7 +351,8 @@ func (f inspector) Visit(node Node, path []Node) (Visitor, error) {
 // f(node, path); node must not be nil. If f returns a nil error, Inspect invokes f
 // for all the non-nil children of node, recursively.
 func Inspect(node Node, f inspector) {
-	Walk(f, node, nil) //nolint:errcheck
+	//nolint: errcheck
+	Walk(f, node, nil)
 }
 
 // Children returns a list of all child nodes of a syntax tree node.
@@ -422,7 +418,7 @@ func mergeRanges(first, last Node) posrange.PositionRange {
 	}
 }
 
-// PositionRange implements the Node interface.
+// Item implements the Node interface.
 // This makes it possible to call mergeRanges on them.
 func (i *Item) PositionRange() posrange.PositionRange {
 	return posrange.PositionRange{

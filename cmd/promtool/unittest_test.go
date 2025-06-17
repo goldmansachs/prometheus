@@ -14,15 +14,11 @@
 package main
 
 import (
-	"bytes"
-	"encoding/xml"
-	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/prometheus/prometheus/promql/promqltest"
-	"github.com/prometheus/prometheus/util/junitxml"
+	"github.com/prometheus/prometheus/promql"
 )
 
 func TestRulesUnitTest(t *testing.T) {
@@ -32,7 +28,7 @@ func TestRulesUnitTest(t *testing.T) {
 	tests := []struct {
 		name      string
 		args      args
-		queryOpts promqltest.LazyLoaderOpts
+		queryOpts promql.LazyLoaderOpts
 		want      int
 	}{
 		{
@@ -96,7 +92,7 @@ func TestRulesUnitTest(t *testing.T) {
 			args: args{
 				files: []string{"./testdata/at-modifier-test.yml"},
 			},
-			queryOpts: promqltest.LazyLoaderOpts{
+			queryOpts: promql.LazyLoaderOpts{
 				EnableAtModifier: true,
 			},
 			want: 0,
@@ -113,7 +109,7 @@ func TestRulesUnitTest(t *testing.T) {
 			args: args{
 				files: []string{"./testdata/negative-offset-test.yml"},
 			},
-			queryOpts: promqltest.LazyLoaderOpts{
+			queryOpts: promql.LazyLoaderOpts{
 				EnableNegativeOffset: true,
 			},
 			want: 0,
@@ -123,65 +119,19 @@ func TestRulesUnitTest(t *testing.T) {
 			args: args{
 				files: []string{"./testdata/no-test-group-interval.yml"},
 			},
-			queryOpts: promqltest.LazyLoaderOpts{
+			queryOpts: promql.LazyLoaderOpts{
 				EnableNegativeOffset: true,
 			},
 			want: 0,
 		},
 	}
-	reuseFiles := []string{}
-	reuseCount := [2]int{}
 	for _, tt := range tests {
-		if (tt.queryOpts == promqltest.LazyLoaderOpts{
-			EnableNegativeOffset: true,
-		} || tt.queryOpts == promqltest.LazyLoaderOpts{
-			EnableAtModifier: true,
-		}) {
-			reuseFiles = append(reuseFiles, tt.args.files...)
-			reuseCount[tt.want] += len(tt.args.files)
-		}
 		t.Run(tt.name, func(t *testing.T) {
 			if got := RulesUnitTest(tt.queryOpts, nil, false, tt.args.files...); got != tt.want {
 				t.Errorf("RulesUnitTest() = %v, want %v", got, tt.want)
 			}
 		})
 	}
-	t.Run("Junit xml output ", func(t *testing.T) {
-		var buf bytes.Buffer
-		if got := RulesUnitTestResult(&buf, promqltest.LazyLoaderOpts{}, nil, false, reuseFiles...); got != 1 {
-			t.Errorf("RulesUnitTestResults() = %v, want 1", got)
-		}
-		var test junitxml.JUnitXML
-		output := buf.Bytes()
-		err := xml.Unmarshal(output, &test)
-		if err != nil {
-			fmt.Println("error in decoding XML:", err)
-			return
-		}
-		var total int
-		var passes int
-		var failures int
-		var cases int
-		total = len(test.Suites)
-		if total != len(reuseFiles) {
-			t.Errorf("JUnit output had %d testsuite elements; expected %d\n", total, len(reuseFiles))
-		}
-
-		for _, i := range test.Suites {
-			if i.FailureCount == 0 {
-				passes++
-			} else {
-				failures++
-			}
-			cases += len(i.Cases)
-		}
-		if total != passes+failures {
-			t.Errorf("JUnit output mismatch: Total testsuites (%d) does not equal the sum of passes (%d) and failures (%d).", total, passes, failures)
-		}
-		if cases < total {
-			t.Errorf("JUnit output had %d suites without test cases\n", total-cases)
-		}
-	})
 }
 
 func TestRulesUnitTestRun(t *testing.T) {
@@ -192,7 +142,7 @@ func TestRulesUnitTestRun(t *testing.T) {
 	tests := []struct {
 		name      string
 		args      args
-		queryOpts promqltest.LazyLoaderOpts
+		queryOpts promql.LazyLoaderOpts
 		want      int
 	}{
 		{

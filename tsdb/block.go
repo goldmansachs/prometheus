@@ -77,10 +77,6 @@ type IndexReader interface {
 	// during background garbage collections.
 	Postings(ctx context.Context, name string, values ...string) (index.Postings, error)
 
-	// PostingsForLabelMatching returns a sorted iterator over postings having a label with the given name and a value for which match returns true.
-	// If no postings are found having at least one matching label, an empty iterator is returned.
-	PostingsForLabelMatching(ctx context.Context, name string, match func(value string) bool) index.Postings
-
 	// SortedPostings returns a postings list that is reordered to be sorted
 	// by the label set of the underlying series.
 	SortedPostings(index.Postings) index.Postings
@@ -103,9 +99,9 @@ type IndexReader interface {
 	// storage.ErrNotFound is returned as error.
 	LabelValueFor(ctx context.Context, id storage.SeriesRef, label string) (string, error)
 
-	// LabelNamesFor returns all the label names for the series referred to by the postings.
+	// LabelNamesFor returns all the label names for the series referred to by IDs.
 	// The names returned are sorted.
-	LabelNamesFor(ctx context.Context, postings index.Postings) ([]string, error)
+	LabelNamesFor(ctx context.Context, ids ...storage.SeriesRef) ([]string, error)
 
 	// Close releases the underlying resources of the reader.
 	Close() error
@@ -522,10 +518,6 @@ func (r blockIndexReader) Postings(ctx context.Context, name string, values ...s
 	return p, nil
 }
 
-func (r blockIndexReader) PostingsForLabelMatching(ctx context.Context, name string, match func(string) bool) index.Postings {
-	return r.ir.PostingsForLabelMatching(ctx, name, match)
-}
-
 func (r blockIndexReader) SortedPostings(p index.Postings) index.Postings {
 	return r.ir.SortedPostings(p)
 }
@@ -551,10 +543,10 @@ func (r blockIndexReader) LabelValueFor(ctx context.Context, id storage.SeriesRe
 	return r.ir.LabelValueFor(ctx, id, label)
 }
 
-// LabelNamesFor returns all the label names for the series referred to by the postings.
+// LabelNamesFor returns all the label names for the series referred to by IDs.
 // The names returned are sorted.
-func (r blockIndexReader) LabelNamesFor(ctx context.Context, postings index.Postings) ([]string, error) {
-	return r.ir.LabelNamesFor(ctx, postings)
+func (r blockIndexReader) LabelNamesFor(ctx context.Context, ids ...storage.SeriesRef) ([]string, error) {
+	return r.ir.LabelNamesFor(ctx, ids...)
 }
 
 type blockTombstoneReader struct {
@@ -646,10 +638,10 @@ Outer:
 }
 
 // CleanTombstones will remove the tombstones and rewrite the block (only if there are any tombstones).
-// If there was a rewrite, then it returns the ULID of new blocks written, else nil.
-// If a resultant block is empty (tombstones covered the whole block), then it returns an empty slice.
+// If there was a rewrite, then it returns the ULID of the new block written, else nil.
+// If the resultant block is empty (tombstones covered the whole block), then it deletes the new block and return nil UID.
 // It returns a boolean indicating if the parent block can be deleted safely of not.
-func (pb *Block) CleanTombstones(dest string, c Compactor) ([]ulid.ULID, bool, error) {
+func (pb *Block) CleanTombstones(dest string, c Compactor) (*ulid.ULID, bool, error) {
 	numStones := 0
 
 	if err := pb.tombstones.Iter(func(id storage.SeriesRef, ivs tombstones.Intervals) error {
@@ -664,12 +656,12 @@ func (pb *Block) CleanTombstones(dest string, c Compactor) ([]ulid.ULID, bool, e
 	}
 
 	meta := pb.Meta()
-	uids, err := c.Write(dest, pb, pb.meta.MinTime, pb.meta.MaxTime, &meta)
+	uid, err := c.Write(dest, pb, pb.meta.MinTime, pb.meta.MaxTime, &meta)
 	if err != nil {
 		return nil, false, err
 	}
 
-	return uids, true, nil
+	return &uid, true, nil
 }
 
 // Snapshot creates snapshot of the block into dir.

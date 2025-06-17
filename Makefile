@@ -24,7 +24,6 @@ TSDB_BENCHMARK_DATASET ?= ./tsdb/testdata/20kseries.json
 TSDB_BENCHMARK_OUTPUT_DIR ?= ./benchout
 
 GOLANGCI_LINT_OPTS ?= --timeout 4m
-GOYACC_VERSION ?= v0.6.0
 
 include Makefile.common
 
@@ -79,34 +78,16 @@ assets-tarball: assets
 	@echo '>> packaging assets'
 	scripts/package_assets.sh
 
+# We only want to generate the parser when there's changes to the grammar.
 .PHONY: parser
 parser:
 	@echo ">> running goyacc to generate the .go file."
-ifeq (, $(shell command -v goyacc 2> /dev/null))
+ifeq (, $(shell command -v goyacc > /dev/null))
 	@echo "goyacc not installed so skipping"
-	@echo "To install: \"go install golang.org/x/tools/cmd/goyacc@$(GOYACC_VERSION)\" or run \"make install-goyacc\""
+	@echo "To install: go install golang.org/x/tools/cmd/goyacc@v0.6.0"
 else
-	$(MAKE) promql/parser/generated_parser.y.go
+	goyacc -o promql/parser/generated_parser.y.go promql/parser/generated_parser.y
 endif
-
-promql/parser/generated_parser.y.go: promql/parser/generated_parser.y
-	@echo ">> running goyacc to generate the .go file."
-	@$(FIRST_GOPATH)/bin/goyacc -l -o promql/parser/generated_parser.y.go promql/parser/generated_parser.y
-
-.PHONY: clean-parser
-clean-parser:
-	@echo ">> cleaning generated parser"
-	@rm -f promql/parser/generated_parser.y.go
-
-.PHONY: check-generated-parser
-check-generated-parser: clean-parser promql/parser/generated_parser.y.go
-	@echo ">> checking generated parser"
-	@git diff --exit-code -- promql/parser/generated_parser.y.go || (echo "Generated parser is out of date. Please run 'make parser' and commit the changes." && false)
-
-.PHONY: install-goyacc
-install-goyacc:
-	@echo ">> installing goyacc $(GOYACC_VERSION)"
-	@go install golang.org/x/tools/cmd/goyacc@$(GOYACC_VERSION)
 
 .PHONY: test
 # If we only want to only test go code we have to change the test target
@@ -114,7 +95,7 @@ install-goyacc:
 ifeq ($(GO_ONLY),1)
 test: common-test check-go-mod-version
 else
-test: check-generated-parser common-test ui-build-module ui-test ui-lint check-go-mod-version
+test: common-test ui-build-module ui-test ui-lint check-go-mod-version
 endif
 
 .PHONY: npm_licenses
@@ -139,8 +120,7 @@ plugins/plugins.go: plugins.yml plugins/generate.go
 plugins: plugins/plugins.go
 
 .PHONY: build
-build: assets npm_licenses assets-compress
-#build: assets npm_licenses assets-compress plugins common-build
+build: assets npm_licenses assets-compress plugins common-build
 
 .PHONY: bench_tsdb
 bench_tsdb: $(PROMU)

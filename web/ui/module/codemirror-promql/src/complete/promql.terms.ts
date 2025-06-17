@@ -282,12 +282,6 @@ export const functionIdentifierTerms = [
     type: 'function',
   },
   {
-    label: 'info',
-    detail: 'function',
-    info: 'Add data labels from corresponding info metrics',
-    type: 'function',
-  },
-  {
     label: 'irate',
     detail: 'function',
     info: 'Calculate the per-second increase over the last two samples of a range vector (for counters)',
@@ -548,18 +542,6 @@ export const aggregateOpTerms = [
     label: 'group',
     detail: 'aggregation',
     info: 'Group series, while setting the sample value to 1',
-    type: 'keyword',
-  },
-  {
-    label: 'limitk',
-    detail: 'aggregation',
-    info: 'Sample k elements',
-    type: 'keyword',
-  },
-  {
-    label: 'limit_ratio',
-    detail: 'aggregation',
-    info: 'Sample given ratio of elements',
     type: 'keyword',
   },
   {

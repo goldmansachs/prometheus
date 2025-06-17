@@ -36,11 +36,6 @@ const (
 )
 
 var (
-	clientGoRequestMetrics  = &clientGoRequestMetricAdapter{}
-	clientGoWorkloadMetrics = &clientGoWorkqueueMetricsProvider{}
-)
-
-var (
 	// Metrics for client-go's HTTP requests.
 	clientGoRequestResultMetricVec = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
@@ -140,9 +135,6 @@ func clientGoMetrics() []prometheus.Collector {
 }
 
 func RegisterK8sClientMetricsWithPrometheus(registerer prometheus.Registerer) error {
-	clientGoRequestMetrics.RegisterWithK8sGoClient()
-	clientGoWorkloadMetrics.RegisterWithK8sGoClient()
-
 	for _, collector := range clientGoMetrics() {
 		err := registerer.Register(collector)
 		if err != nil {

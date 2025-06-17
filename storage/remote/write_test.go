@@ -15,7 +15,6 @@ package remote
 
 import (
 	"bytes"
-	"errors"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -44,12 +43,11 @@ func testRemoteWriteConfig() *config.RemoteWriteConfig {
 				Host:   "localhost",
 			},
 		},
-		QueueConfig:     config.DefaultQueueConfig,
-		ProtobufMessage: config.RemoteWriteProtoMsgV1,
+		QueueConfig: config.DefaultQueueConfig,
 	}
 }
 
-func TestWriteStorageApplyConfig_NoDuplicateWriteConfigs(t *testing.T) {
+func TestNoDuplicateWriteConfigs(t *testing.T) {
 	dir := t.TempDir()
 
 	cfg1 := config.RemoteWriteConfig{
@@ -60,8 +58,7 @@ func TestWriteStorageApplyConfig_NoDuplicateWriteConfigs(t *testing.T) {
 				Host:   "localhost",
 			},
 		},
-		QueueConfig:     config.DefaultQueueConfig,
-		ProtobufMessage: config.RemoteWriteProtoMsgV1,
+		QueueConfig: config.DefaultQueueConfig,
 	}
 	cfg2 := config.RemoteWriteConfig{
 		Name: "write-2",
@@ -71,8 +68,7 @@ func TestWriteStorageApplyConfig_NoDuplicateWriteConfigs(t *testing.T) {
 				Host:   "localhost",
 			},
 		},
-		QueueConfig:     config.DefaultQueueConfig,
-		ProtobufMessage: config.RemoteWriteProtoMsgV1,
+		QueueConfig: config.DefaultQueueConfig,
 	}
 	cfg3 := config.RemoteWriteConfig{
 		URL: &common_config.URL{
@@ -81,49 +77,61 @@ func TestWriteStorageApplyConfig_NoDuplicateWriteConfigs(t *testing.T) {
 				Host:   "localhost",
 			},
 		},
-		QueueConfig:     config.DefaultQueueConfig,
-		ProtobufMessage: config.RemoteWriteProtoMsgV1,
+		QueueConfig: config.DefaultQueueConfig,
 	}
 
-	for _, tc := range []struct {
-		cfgs        []*config.RemoteWriteConfig
-		expectedErr error
-	}{
+	type testcase struct {
+		cfgs []*config.RemoteWriteConfig
+		err  bool
+	}
+
+	cases := []testcase{
 		{ // Two duplicates, we should get an error.
-			cfgs:        []*config.RemoteWriteConfig{&cfg1, &cfg1},
-			expectedErr: errors.New("duplicate remote write configs are not allowed, found duplicate for URL: http://localhost"),
+			cfgs: []*config.RemoteWriteConfig{
+				&cfg1,
+				&cfg1,
+			},
+			err: true,
 		},
 		{ // Duplicates but with different names, we should not get an error.
-			cfgs: []*config.RemoteWriteConfig{&cfg1, &cfg2},
+			cfgs: []*config.RemoteWriteConfig{
+				&cfg1,
+				&cfg2,
+			},
+			err: false,
 		},
 		{ // Duplicates but one with no name, we should not get an error.
-			cfgs: []*config.RemoteWriteConfig{&cfg1, &cfg3},
+			cfgs: []*config.RemoteWriteConfig{
+				&cfg1,
+				&cfg3,
+			},
+			err: false,
 		},
 		{ // Duplicates both with no name, we should get an error.
-			cfgs:        []*config.RemoteWriteConfig{&cfg3, &cfg3},
-			expectedErr: errors.New("duplicate remote write configs are not allowed, found duplicate for URL: http://localhost"),
+			cfgs: []*config.RemoteWriteConfig{
+				&cfg3,
+				&cfg3,
+			},
+			err: true,
 		},
-	} {
-		t.Run("", func(t *testing.T) {
-			s := NewWriteStorage(nil, nil, dir, time.Millisecond, nil, false)
-			conf := &config.Config{
-				GlobalConfig:       config.DefaultGlobalConfig,
-				RemoteWriteConfigs: tc.cfgs,
-			}
-			err := s.ApplyConfig(conf)
-			if tc.expectedErr == nil {
-				require.NoError(t, err)
-			} else {
-				require.Error(t, err)
-				require.Equal(t, tc.expectedErr, err)
-			}
+	}
 
-			require.NoError(t, s.Close())
-		})
+	for _, tc := range cases {
+		s := NewWriteStorage(nil, nil, dir, time.Millisecond, nil)
+		conf := &config.Config{
+			GlobalConfig:       config.DefaultGlobalConfig,
+			RemoteWriteConfigs: tc.cfgs,
+		}
+		err := s.ApplyConfig(conf)
+		gotError := err != nil
+		require.Equal(t, tc.err, gotError)
+
+		err = s.Close()
+		require.NoError(t, err)
 	}
 }
 
-func TestWriteStorageApplyConfig_RestartOnNameChange(t *testing.T) {
+func TestRestartOnNameChange(t *testing.T) {
 	dir := t.TempDir()
 
 	cfg := testRemoteWriteConfig()
@@ -131,11 +139,13 @@ func TestWriteStorageApplyConfig_RestartOnNameChange(t *testing.T) {
 	hash, err := toHash(cfg)
 	require.NoError(t, err)
 
-	s := NewWriteStorage(nil, nil, dir, time.Millisecond, nil, false)
+	s := NewWriteStorage(nil, nil, dir, time.Millisecond, nil)
 
 	conf := &config.Config{
-		GlobalConfig:       config.DefaultGlobalConfig,
-		RemoteWriteConfigs: []*config.RemoteWriteConfig{cfg},
+		GlobalConfig: config.DefaultGlobalConfig,
+		RemoteWriteConfigs: []*config.RemoteWriteConfig{
+			cfg,
+		},
 	}
 	require.NoError(t, s.ApplyConfig(conf))
 	require.Equal(t, s.queues[hash].client().Name(), cfg.Name)
@@ -147,13 +157,14 @@ func TestWriteStorageApplyConfig_RestartOnNameChange(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, s.queues[hash].client().Name(), conf.RemoteWriteConfigs[0].Name)
 
-	require.NoError(t, s.Close())
+	err = s.Close()
+	require.NoError(t, err)
 }
 
-func TestWriteStorageApplyConfig_UpdateWithRegisterer(t *testing.T) {
+func TestUpdateWithRegisterer(t *testing.T) {
 	dir := t.TempDir()
 
-	s := NewWriteStorage(nil, prometheus.NewRegistry(), dir, time.Millisecond, nil, false)
+	s := NewWriteStorage(nil, prometheus.NewRegistry(), dir, time.Millisecond, nil)
 	c1 := &config.RemoteWriteConfig{
 		Name: "named",
 		URL: &common_config.URL{
@@ -162,8 +173,7 @@ func TestWriteStorageApplyConfig_UpdateWithRegisterer(t *testing.T) {
 				Host:   "localhost",
 			},
 		},
-		QueueConfig:     config.DefaultQueueConfig,
-		ProtobufMessage: config.RemoteWriteProtoMsgV1,
+		QueueConfig: config.DefaultQueueConfig,
 	}
 	c2 := &config.RemoteWriteConfig{
 		URL: &common_config.URL{
@@ -172,8 +182,7 @@ func TestWriteStorageApplyConfig_UpdateWithRegisterer(t *testing.T) {
 				Host:   "localhost",
 			},
 		},
-		QueueConfig:     config.DefaultQueueConfig,
-		ProtobufMessage: config.RemoteWriteProtoMsgV1,
+		QueueConfig: config.DefaultQueueConfig,
 	}
 	conf := &config.Config{
 		GlobalConfig:       config.DefaultGlobalConfig,
@@ -188,13 +197,14 @@ func TestWriteStorageApplyConfig_UpdateWithRegisterer(t *testing.T) {
 		require.Equal(t, 10, queue.cfg.MaxShards)
 	}
 
-	require.NoError(t, s.Close())
+	err := s.Close()
+	require.NoError(t, err)
 }
 
-func TestWriteStorageApplyConfig_Lifecycle(t *testing.T) {
+func TestWriteStorageLifecycle(t *testing.T) {
 	dir := t.TempDir()
 
-	s := NewWriteStorage(nil, nil, dir, defaultFlushDeadline, nil, false)
+	s := NewWriteStorage(nil, nil, dir, defaultFlushDeadline, nil)
 	conf := &config.Config{
 		GlobalConfig: config.DefaultGlobalConfig,
 		RemoteWriteConfigs: []*config.RemoteWriteConfig{
@@ -204,13 +214,14 @@ func TestWriteStorageApplyConfig_Lifecycle(t *testing.T) {
 	require.NoError(t, s.ApplyConfig(conf))
 	require.Len(t, s.queues, 1)
 
-	require.NoError(t, s.Close())
+	err := s.Close()
+	require.NoError(t, err)
 }
 
-func TestWriteStorageApplyConfig_UpdateExternalLabels(t *testing.T) {
+func TestUpdateExternalLabels(t *testing.T) {
 	dir := t.TempDir()
 
-	s := NewWriteStorage(nil, prometheus.NewRegistry(), dir, time.Second, nil, false)
+	s := NewWriteStorage(nil, prometheus.NewRegistry(), dir, time.Second, nil)
 
 	externalLabels := labels.FromStrings("external", "true")
 	conf := &config.Config{
@@ -232,13 +243,15 @@ func TestWriteStorageApplyConfig_UpdateExternalLabels(t *testing.T) {
 	require.Len(t, s.queues, 1)
 	require.Equal(t, []labels.Label{{Name: "external", Value: "true"}}, s.queues[hash].externalLabels)
 
-	require.NoError(t, s.Close())
+	err = s.Close()
+	require.NoError(t, err)
 }
 
-func TestWriteStorageApplyConfig_Idempotent(t *testing.T) {
+func TestWriteStorageApplyConfigsIdempotent(t *testing.T) {
 	dir := t.TempDir()
 
-	s := NewWriteStorage(nil, nil, dir, defaultFlushDeadline, nil, false)
+	s := NewWriteStorage(nil, nil, dir, defaultFlushDeadline, nil)
+
 	conf := &config.Config{
 		GlobalConfig: config.GlobalConfig{},
 		RemoteWriteConfigs: []*config.RemoteWriteConfig{
@@ -256,13 +269,14 @@ func TestWriteStorageApplyConfig_Idempotent(t *testing.T) {
 	_, hashExists := s.queues[hash]
 	require.True(t, hashExists, "Queue pointer should have remained the same")
 
-	require.NoError(t, s.Close())
+	err = s.Close()
+	require.NoError(t, err)
 }
 
-func TestWriteStorageApplyConfig_PartialUpdate(t *testing.T) {
+func TestWriteStorageApplyConfigsPartialUpdate(t *testing.T) {
 	dir := t.TempDir()
 
-	s := NewWriteStorage(nil, nil, dir, defaultFlushDeadline, nil, false)
+	s := NewWriteStorage(nil, nil, dir, defaultFlushDeadline, nil)
 
 	c0 := &config.RemoteWriteConfig{
 		RemoteTimeout: model.Duration(10 * time.Second),
@@ -272,7 +286,6 @@ func TestWriteStorageApplyConfig_PartialUpdate(t *testing.T) {
 				Regex: relabel.MustNewRegexp(".+"),
 			},
 		},
-		ProtobufMessage: config.RemoteWriteProtoMsgV1,
 	}
 	c1 := &config.RemoteWriteConfig{
 		RemoteTimeout: model.Duration(20 * time.Second),
@@ -280,12 +293,10 @@ func TestWriteStorageApplyConfig_PartialUpdate(t *testing.T) {
 		HTTPClientConfig: common_config.HTTPClientConfig{
 			BearerToken: "foo",
 		},
-		ProtobufMessage: config.RemoteWriteProtoMsgV1,
 	}
 	c2 := &config.RemoteWriteConfig{
-		RemoteTimeout:   model.Duration(30 * time.Second),
-		QueueConfig:     config.DefaultQueueConfig,
-		ProtobufMessage: config.RemoteWriteProtoMsgV1,
+		RemoteTimeout: model.Duration(30 * time.Second),
+		QueueConfig:   config.DefaultQueueConfig,
 	}
 
 	conf := &config.Config{
@@ -365,11 +376,12 @@ func TestWriteStorageApplyConfig_PartialUpdate(t *testing.T) {
 	_, hashExists = s.queues[hashes[2]]
 	require.True(t, hashExists, "Pointer of unchanged queue should have remained the same")
 
-	require.NoError(t, s.Close())
+	err = s.Close()
+	require.NoError(t, err)
 }
 
 func TestOTLPWriteHandler(t *testing.T) {
-	exportRequest := generateOTLPWriteRequest()
+	exportRequest := generateOTLPWriteRequest(t)
 
 	buf, err := exportRequest.MarshalProto()
 	require.NoError(t, err)
@@ -379,11 +391,7 @@ func TestOTLPWriteHandler(t *testing.T) {
 	req.Header.Set("Content-Type", "application/x-protobuf")
 
 	appendable := &mockAppendable{}
-	handler := NewOTLPWriteHandler(nil, appendable, func() config.Config {
-		return config.Config{
-			OTLPConfig: config.DefaultOTLPConfig,
-		}
-	})
+	handler := NewOTLPWriteHandler(nil, appendable)
 
 	recorder := httptest.NewRecorder()
 	handler.ServeHTTP(recorder, req)
@@ -396,12 +404,12 @@ func TestOTLPWriteHandler(t *testing.T) {
 	require.Len(t, appendable.exemplars, 1)  // 1 (exemplar)
 }
 
-func generateOTLPWriteRequest() pmetricotlp.ExportRequest {
+func generateOTLPWriteRequest(t *testing.T) pmetricotlp.ExportRequest {
 	d := pmetric.NewMetrics()
 
 	// Generate One Counter, One Gauge, One Histogram, One Exponential-Histogram
 	// with resource attributes: service.name="test-service", service.instance.id="test-instance", host.name="test-host"
-	// with metric attribute: foo.bar="baz"
+	// with metric attibute: foo.bar="baz"
 
 	timestamp := time.Now()
 
@@ -426,7 +434,6 @@ func generateOTLPWriteRequest() pmetricotlp.ExportRequest {
 	counterDataPoint.Attributes().PutStr("foo.bar", "baz")
 
 	counterExemplar := counterDataPoint.Exemplars().AppendEmpty()
-
 	counterExemplar.SetTimestamp(pcommon.NewTimestampFromTime(timestamp))
 	counterExemplar.SetDoubleValue(10.0)
 	counterExemplar.SetSpanID(pcommon.SpanID{0, 1, 2, 3, 4, 5, 6, 7})

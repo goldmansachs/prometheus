@@ -59,22 +59,17 @@ const (
 	linodeLabelSpecsVCPUs         = linodeLabel + "specs_vcpus"
 	linodeLabelSpecsTransferBytes = linodeLabel + "specs_transfer_bytes"
 	linodeLabelExtraIPs           = linodeLabel + "extra_ips"
-	linodeLabelIPv6Ranges         = linodeLabel + "ipv6_ranges"
 
 	// This is our events filter; when polling for changes, we care only about
 	// events since our last refresh.
-	// Docs: https://www.linode.com/docs/api/account/#events-list.
+	// Docs: https://www.linode.com/docs/api/account/#events-list
 	filterTemplate = `{"created": {"+gte": "%s"}}`
-
-	// Optional region filtering.
-	regionFilterTemplate = `{"region": "%s"}`
 )
 
 // DefaultSDConfig is the default Linode SD configuration.
 var DefaultSDConfig = SDConfig{
 	TagSeparator:     ",",
 	Port:             80,
-	Region:           "",
 	RefreshInterval:  model.Duration(60 * time.Second),
 	HTTPClientConfig: config.DefaultHTTPClientConfig,
 }
@@ -90,7 +85,6 @@ type SDConfig struct {
 	RefreshInterval model.Duration `yaml:"refresh_interval"`
 	Port            int            `yaml:"port"`
 	TagSeparator    string         `yaml:"tag_separator,omitempty"`
-	Region          string         `yaml:"region,omitempty"`
 }
 
 // NewDiscovererMetrics implements discovery.Config.
@@ -128,7 +122,6 @@ type Discovery struct {
 	*refresh.Discovery
 	client               *linodego.Client
 	port                 int
-	region               string
 	tagSeparator         string
 	lastRefreshTimestamp time.Time
 	pollCount            int
@@ -146,7 +139,6 @@ func NewDiscovery(conf *SDConfig, logger log.Logger, metrics discovery.Discovere
 
 	d := &Discovery{
 		port:                 conf.Port,
-		region:               conf.Region,
 		tagSeparator:         conf.TagSeparator,
 		pollCount:            0,
 		lastRefreshTimestamp: time.Now().UTC(),
@@ -186,12 +178,12 @@ func (d *Discovery) refresh(ctx context.Context) ([]*targetgroup.Group, error) {
 
 	if d.lastResults != nil && d.eventPollingEnabled {
 		// Check to see if there have been any events. If so, refresh our data.
-		eventsOpts := linodego.ListOptions{
+		opts := linodego.ListOptions{
 			PageOptions: &linodego.PageOptions{Page: 1},
 			PageSize:    25,
 			Filter:      fmt.Sprintf(filterTemplate, d.lastRefreshTimestamp.Format("2006-01-02T15:04:05")),
 		}
-		events, err := d.client.ListEvents(ctx, &eventsOpts)
+		events, err := d.client.ListEvents(ctx, &opts)
 		if err != nil {
 			var e *linodego.Error
 			if errors.As(err, &e) && e.Code == http.StatusUnauthorized {
@@ -232,40 +224,16 @@ func (d *Discovery) refreshData(ctx context.Context) ([]*targetgroup.Group, erro
 	tg := &targetgroup.Group{
 		Source: "Linode",
 	}
-	// We need 3 of these because Linodego writes into the structure during pagination
-	listInstancesOpts := linodego.ListOptions{
-		PageSize: 500,
-	}
-	listIPAddressesOpts := linodego.ListOptions{
-		PageSize: 500,
-	}
-	listIPv6RangesOpts := linodego.ListOptions{
-		PageSize: 500,
-	}
-
-	// If region filter provided, use it to constrain results.
-	if d.region != "" {
-		listInstancesOpts.Filter = fmt.Sprintf(regionFilterTemplate, d.region)
-		listIPAddressesOpts.Filter = fmt.Sprintf(regionFilterTemplate, d.region)
-		listIPv6RangesOpts.Filter = fmt.Sprintf(regionFilterTemplate, d.region)
-	}
 
 	// Gather all linode instances.
-	instances, err := d.client.ListInstances(ctx, &listInstancesOpts)
+	instances, err := d.client.ListInstances(ctx, &linodego.ListOptions{PageSize: 500})
 	if err != nil {
 		d.metrics.failuresCount.Inc()
 		return nil, err
 	}
 
 	// Gather detailed IP address info for all IPs on all linode instances.
-	detailedIPs, err := d.client.ListIPAddresses(ctx, &listIPAddressesOpts)
-	if err != nil {
-		d.metrics.failuresCount.Inc()
-		return nil, err
-	}
-
-	// Gather detailed IPv6 Range info for all linode instances.
-	ipv6RangeList, err := d.client.ListIPv6Ranges(ctx, &listIPv6RangesOpts)
+	detailedIPs, err := d.client.ListIPAddresses(ctx, &linodego.ListOptions{PageSize: 500})
 	if err != nil {
 		d.metrics.failuresCount.Inc()
 		return nil, err
@@ -280,7 +248,7 @@ func (d *Discovery) refreshData(ctx context.Context) ([]*targetgroup.Group, erro
 			privateIPv4, publicIPv4, publicIPv6             string
 			privateIPv4RDNS, publicIPv4RDNS, publicIPv6RDNS string
 			backupsStatus                                   string
-			extraIPs, ipv6Ranges                            []string
+			extraIPs                                        []string
 		)
 
 		for _, ip := range instance.IPv4 {
@@ -308,22 +276,16 @@ func (d *Discovery) refreshData(ctx context.Context) ([]*targetgroup.Group, erro
 		}
 
 		if instance.IPv6 != "" {
-			slaac := strings.Split(instance.IPv6, "/")[0]
 			for _, detailedIP := range detailedIPs {
-				if detailedIP.Address != slaac {
+				if detailedIP.Address != strings.Split(instance.IPv6, "/")[0] {
 					continue
 				}
+
 				publicIPv6 = detailedIP.Address
 
 				if detailedIP.RDNS != "" && detailedIP.RDNS != "null" {
 					publicIPv6RDNS = detailedIP.RDNS
 				}
-			}
-			for _, ipv6Range := range ipv6RangeList {
-				if ipv6Range.RouteTarget != slaac {
-					continue
-				}
-				ipv6Ranges = append(ipv6Ranges, fmt.Sprintf("%s/%d", ipv6Range.Range, ipv6Range.Prefix))
 			}
 		}
 
@@ -334,7 +296,7 @@ func (d *Discovery) refreshData(ctx context.Context) ([]*targetgroup.Group, erro
 		}
 
 		labels := model.LabelSet{
-			linodeLabelID:                 model.LabelValue(strconv.Itoa(instance.ID)),
+			linodeLabelID:                 model.LabelValue(fmt.Sprintf("%d", instance.ID)),
 			linodeLabelName:               model.LabelValue(instance.Label),
 			linodeLabelImage:              model.LabelValue(instance.Image),
 			linodeLabelPrivateIPv4:        model.LabelValue(privateIPv4),
@@ -347,13 +309,13 @@ func (d *Discovery) refreshData(ctx context.Context) ([]*targetgroup.Group, erro
 			linodeLabelType:               model.LabelValue(instance.Type),
 			linodeLabelStatus:             model.LabelValue(instance.Status),
 			linodeLabelGroup:              model.LabelValue(instance.Group),
-			linodeLabelGPUs:               model.LabelValue(strconv.Itoa(instance.Specs.GPUs)),
+			linodeLabelGPUs:               model.LabelValue(fmt.Sprintf("%d", instance.Specs.GPUs)),
 			linodeLabelHypervisor:         model.LabelValue(instance.Hypervisor),
 			linodeLabelBackups:            model.LabelValue(backupsStatus),
-			linodeLabelSpecsDiskBytes:     model.LabelValue(strconv.FormatInt(int64(instance.Specs.Disk)<<20, 10)),
-			linodeLabelSpecsMemoryBytes:   model.LabelValue(strconv.FormatInt(int64(instance.Specs.Memory)<<20, 10)),
-			linodeLabelSpecsVCPUs:         model.LabelValue(strconv.Itoa(instance.Specs.VCPUs)),
-			linodeLabelSpecsTransferBytes: model.LabelValue(strconv.FormatInt(int64(instance.Specs.Transfer)<<20, 10)),
+			linodeLabelSpecsDiskBytes:     model.LabelValue(fmt.Sprintf("%d", int64(instance.Specs.Disk)<<20)),
+			linodeLabelSpecsMemoryBytes:   model.LabelValue(fmt.Sprintf("%d", int64(instance.Specs.Memory)<<20)),
+			linodeLabelSpecsVCPUs:         model.LabelValue(fmt.Sprintf("%d", instance.Specs.VCPUs)),
+			linodeLabelSpecsTransferBytes: model.LabelValue(fmt.Sprintf("%d", int64(instance.Specs.Transfer)<<20)),
 		}
 
 		addr := net.JoinHostPort(publicIPv4, strconv.FormatUint(uint64(d.port), 10))
@@ -368,18 +330,10 @@ func (d *Discovery) refreshData(ctx context.Context) ([]*targetgroup.Group, erro
 
 		if len(extraIPs) > 0 {
 			// This instance has more than one of at least one type of IP address (public, private,
-			// IPv4,etc. We provide those extra IPs found here just like we do for instance
+			// IPv4, IPv6, etc. We provide those extra IPs found here just like we do for instance
 			// tags, we surround a separated list with the tagSeparator config.
 			ips := d.tagSeparator + strings.Join(extraIPs, d.tagSeparator) + d.tagSeparator
 			labels[linodeLabelExtraIPs] = model.LabelValue(ips)
-		}
-
-		if len(ipv6Ranges) > 0 {
-			// This instance has more than one IPv6 Ranges routed to it we provide these
-			// Ranges found here just like we do for instance tags, we surround a separated
-			// list with the tagSeparator config.
-			ips := d.tagSeparator + strings.Join(ipv6Ranges, d.tagSeparator) + d.tagSeparator
-			labels[linodeLabelIPv6Ranges] = model.LabelValue(ips)
 		}
 
 		tg.Targets = append(tg.Targets, labels)

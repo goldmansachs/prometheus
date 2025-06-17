@@ -205,22 +205,12 @@ describe('promql operations', () => {
       expectedDiag: [] as Diagnostic[],
     },
     {
-      expr: 'foo and on(test,"blub") bar',
-      expectedValueType: ValueType.vector,
-      expectedDiag: [] as Diagnostic[],
-    },
-    {
       expr: 'foo and on() bar',
       expectedValueType: ValueType.vector,
       expectedDiag: [] as Diagnostic[],
     },
     {
       expr: 'foo and ignoring(test,blub) bar',
-      expectedValueType: ValueType.vector,
-      expectedDiag: [] as Diagnostic[],
-    },
-    {
-      expr: 'foo and ignoring(test,"blub") bar',
       expectedValueType: ValueType.vector,
       expectedDiag: [] as Diagnostic[],
     },
@@ -236,11 +226,6 @@ describe('promql operations', () => {
     },
     {
       expr: 'foo / on(test,blub) group_left(bar) bar',
-      expectedValueType: ValueType.vector,
-      expectedDiag: [] as Diagnostic[],
-    },
-    {
-      expr: 'foo / on(test,blub) group_left("bar") bar',
       expectedValueType: ValueType.vector,
       expectedDiag: [] as Diagnostic[],
     },
@@ -839,151 +824,6 @@ describe('promql operations', () => {
       expr: 'sum (rate(foo[5m])) @ 456',
       expectedValueType: ValueType.vector,
       expectedDiag: [],
-    },
-    {
-      expr: '{"foo"}',
-      expectedValueType: ValueType.vector,
-      expectedDiag: [],
-    },
-    {
-      // with metric name in the middle
-      expr: '{a="b","foo",c~="d"}',
-      expectedValueType: ValueType.vector,
-      expectedDiag: [],
-    },
-    {
-      expr: '{"foo", a="bc"}',
-      expectedValueType: ValueType.vector,
-      expectedDiag: [],
-    },
-    {
-      expr: '{"colon:in:the:middle"}',
-      expectedValueType: ValueType.vector,
-      expectedDiag: [],
-    },
-    {
-      expr: '{"dot.in.the.middle"}',
-      expectedValueType: ValueType.vector,
-      expectedDiag: [],
-    },
-    {
-      expr: '{"😀 in metric name"}',
-      expectedValueType: ValueType.vector,
-      expectedDiag: [],
-    },
-    {
-      // quotes with escape
-      expr: '{"this is \"foo\" metric"}', // eslint-disable-line
-      expectedValueType: ValueType.vector,
-      expectedDiag: [],
-    },
-    {
-      expr: '{"foo","colon:in:the:middle"="val"}',
-      expectedValueType: ValueType.vector,
-      expectedDiag: [],
-    },
-    {
-      expr: '{"foo","dot.in.the.middle"="val"}',
-      expectedValueType: ValueType.vector,
-      expectedDiag: [],
-    },
-    {
-      expr: '{"foo","😀 in label name"="val"}',
-      expectedValueType: ValueType.vector,
-      expectedDiag: [],
-    },
-    {
-      // quotes with escape
-      expr: '{"foo","this is \"bar\" label"="val"}', // eslint-disable-line
-      expectedValueType: ValueType.vector,
-      expectedDiag: [],
-    },
-    {
-      expr: 'foo{"bar"}',
-      expectedValueType: ValueType.vector,
-      expectedDiag: [
-        {
-          from: 0,
-          message: 'metric name must not be set twice: foo or bar',
-          severity: 'error',
-          to: 10,
-        },
-      ],
-    },
-    {
-      expr: '{"foo", __name__="bar"}',
-      expectedValueType: ValueType.vector,
-      expectedDiag: [
-        {
-          from: 0,
-          message: 'metric name must not be set twice: foo or bar',
-          severity: 'error',
-          to: 23,
-        },
-      ],
-    },
-    {
-      expr: '{"foo", "__name__"="bar"}',
-      expectedValueType: ValueType.vector,
-      expectedDiag: [
-        {
-          from: 0,
-          message: 'metric name must not be set twice: foo or bar',
-          severity: 'error',
-          to: 25,
-        },
-      ],
-    },
-    {
-      expr: '{"__name__"="foo", __name__="bar"}',
-      expectedValueType: ValueType.vector,
-      expectedDiag: [
-        {
-          from: 0,
-          message: 'metric name must not be set twice: foo or bar',
-          severity: 'error',
-          to: 34,
-        },
-      ],
-    },
-    {
-      expr: '{"foo", "bar"}',
-      expectedValueType: ValueType.vector,
-      expectedDiag: [
-        {
-          from: 0,
-          to: 14,
-          message: 'metric name must not be set twice: foo or bar',
-          severity: 'error',
-        },
-      ],
-    },
-    {
-      expr: `{'foo\`metric':'bar'}`, // eslint-disable-line
-      expectedValueType: ValueType.vector,
-      expectedDiag: [],
-    },
-    {
-      expr: '{`foo\"metric`=`bar`}', // eslint-disable-line
-      expectedValueType: ValueType.vector,
-      expectedDiag: [],
-    },
-    {
-      expr: 'info(rate(http_request_counter_total{}[5m]))',
-      expectedValueType: ValueType.vector,
-      expectedDiag: [],
-    },
-    {
-      expr: 'info(rate(http_request_counter_total[5m]), target_info{service_version=~".+"})',
-      expectedValueType: ValueType.vector,
-      expectedDiag: [
-        {
-          from: 0,
-          to: 78,
-          message: `expected label selectors as the second argument to "info" function, got [object Object]`,
-          severity: 'error',
-        },
-      ],
     },
   ];
   testCases.forEach((value) => {

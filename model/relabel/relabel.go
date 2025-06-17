@@ -17,7 +17,6 @@ import (
 	"crypto/md5"
 	"encoding/binary"
 	"fmt"
-	"strconv"
 	"strings"
 
 	"github.com/grafana/regexp"
@@ -49,7 +48,7 @@ const (
 	Drop Action = "drop"
 	// KeepEqual drops targets for which the input does not match the target.
 	KeepEqual Action = "keepequal"
-	// DropEqual drops targets for which the input does match the target.
+	// Drop drops targets for which the input does match the target.
 	DropEqual Action = "dropequal"
 	// HashMod sets a label to the modulus of a hash of labels.
 	HashMod Action = "hashmod"
@@ -206,17 +205,8 @@ func (re Regexp) MarshalYAML() (interface{}, error) {
 	return nil, nil
 }
 
-// IsZero implements the yaml.IsZeroer interface.
-func (re Regexp) IsZero() bool {
-	return re.Regexp == DefaultRelabelConfig.Regex.Regexp
-}
-
 // String returns the original string used to compile the regular expression.
 func (re Regexp) String() string {
-	if re.Regexp == nil {
-		return ""
-	}
-
 	str := re.Regexp.String()
 	// Trim the anchor `^(?:` prefix and `)$` suffix.
 	return str[4 : len(str)-2]
@@ -300,7 +290,7 @@ func relabel(cfg *Config, lb *labels.Builder) (keep bool) {
 		hash := md5.Sum([]byte(val))
 		// Use only the last 8 bytes of the hash to give the same result as earlier versions of this code.
 		mod := binary.BigEndian.Uint64(hash[8:]) % cfg.Modulus
-		lb.Set(cfg.TargetLabel, strconv.FormatUint(mod, 10))
+		lb.Set(cfg.TargetLabel, fmt.Sprintf("%d", mod))
 	case LabelMap:
 		lb.Range(func(l labels.Label) {
 			if cfg.Regex.MatchString(l.Name) {

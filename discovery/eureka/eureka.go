@@ -228,6 +228,7 @@ func targetsForApp(app *Application) []model.LabelSet {
 		}
 
 		targets = append(targets, target)
+
 	}
 	return targets
 }

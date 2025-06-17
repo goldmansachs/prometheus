@@ -11,10 +11,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package promql_test
+package promql
 
 import (
 	"context"
+	"math"
 	"testing"
 	"time"
 
@@ -22,9 +23,7 @@ import (
 
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/model/timestamp"
-	"github.com/prometheus/prometheus/promql"
 	"github.com/prometheus/prometheus/promql/parser"
-	"github.com/prometheus/prometheus/promql/promqltest"
 	"github.com/prometheus/prometheus/util/teststorage"
 )
 
@@ -34,13 +33,13 @@ func TestDeriv(t *testing.T) {
 	// so we test it by hand.
 	storage := teststorage.New(t)
 	defer storage.Close()
-	opts := promql.EngineOpts{
+	opts := EngineOpts{
 		Logger:     nil,
 		Reg:        nil,
 		MaxSamples: 10000,
 		Timeout:    10 * time.Second,
 	}
-	engine := promqltest.NewTestEngineWithOpts(t, opts)
+	engine := NewEngine(opts)
 
 	a := storage.Appender(context.Background())
 
@@ -71,13 +70,19 @@ func TestDeriv(t *testing.T) {
 
 func TestFunctionList(t *testing.T) {
 	// Test that Functions and parser.Functions list the same functions.
-	for i := range promql.FunctionCalls {
+	for i := range FunctionCalls {
 		_, ok := parser.Functions[i]
 		require.True(t, ok, "function %s exists in promql package, but not in parser package", i)
 	}
 
 	for i := range parser.Functions {
-		_, ok := promql.FunctionCalls[i]
+		_, ok := FunctionCalls[i]
 		require.True(t, ok, "function %s exists in parser package, but not in promql package", i)
 	}
+}
+
+func TestKahanSum(t *testing.T) {
+	vals := []float64{1.0, math.Pow(10, 100), 1.0, -1 * math.Pow(10, 100)}
+	expected := 2.0
+	require.Equal(t, expected, kahanSum(vals))
 }

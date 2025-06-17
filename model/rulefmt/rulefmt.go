@@ -27,7 +27,6 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/prometheus/prometheus/model/timestamp"
-	"github.com/prometheus/prometheus/promql"
 	"github.com/prometheus/prometheus/promql/parser"
 	"github.com/prometheus/prometheus/template"
 )
@@ -136,11 +135,10 @@ func (g *RuleGroups) Validate(node ruleGroups) (errs []error) {
 
 // RuleGroup is a list of sequentially evaluated recording and alerting rules.
 type RuleGroup struct {
-	Name        string          `yaml:"name"`
-	Interval    model.Duration  `yaml:"interval,omitempty"`
-	QueryOffset *model.Duration `yaml:"query_offset,omitempty"`
-	Limit       int             `yaml:"limit,omitempty"`
-	Rules       []RuleNode      `yaml:"rules"`
+	Name     string         `yaml:"name"`
+	Interval model.Duration `yaml:"interval,omitempty"`
+	Limit    int            `yaml:"limit,omitempty"`
+	Rules    []RuleNode     `yaml:"rules"`
 }
 
 // Rule describes an alerting or recording rule.
@@ -258,7 +256,7 @@ func testTemplateParsing(rl *RuleNode) (errs []error) {
 	}
 
 	// Trying to parse templates.
-	tmplData := template.AlertTemplateData(map[string]string{}, map[string]string{}, "", promql.Sample{})
+	tmplData := template.AlertTemplateData(map[string]string{}, map[string]string{}, "", 0)
 	defs := []string{
 		"{{$labels := .Labels}}",
 		"{{$externalLabels := .ExternalLabels}}",
@@ -307,7 +305,7 @@ func Parse(content []byte) (*RuleGroups, []error) {
 	)
 
 	decoder := yaml.NewDecoder(bytes.NewReader(content))
-	// decoder.KnownFields(true)
+	decoder.KnownFields(true)
 	err := decoder.Decode(&groups)
 	// Ignore io.EOF which happens with empty input.
 	if err != nil && !errors.Is(err, io.EOF) {

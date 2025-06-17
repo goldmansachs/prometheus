@@ -10,9 +10,8 @@ if ! [[ "$0" =~ "scripts/genproto.sh" ]]; then
 	exit 255
 fi
 
-# TODO(bwplotka): Move to buf, this is not OSS agnostic, likely won't work locally.
 if ! [[ $(protoc --version) =~ "3.15.8" ]]; then
-	echo "could not find protoc 3.15.8, is it installed + in PATH? Consider commenting out this check for local flow"
+	echo "could not find protoc 3.15.8, is it installed + in PATH?"
 	exit 255
 fi
 
@@ -41,9 +40,6 @@ for dir in ${DIRS}; do
             -I="${PROM_PATH}" \
             -I="${GRPC_GATEWAY_ROOT}/third_party/googleapis" \
             ./*.proto
-		protoc --gogofast_out=plugins=grpc:. -I=. \
-            -I="${GOGOPROTO_PATH}" \
-            ./io/prometheus/write/v2/*.proto
 		protoc --gogofast_out=Mgoogle/protobuf/timestamp.proto=github.com/gogo/protobuf/types,paths=source_relative:. -I=. \
             -I="${GOGOPROTO_PATH}" \
             ./io/prometheus/client/*.proto

@@ -66,7 +66,7 @@ endpoint: %s
 
 	_, err := createClient(&conf)
 
-	require.ErrorContains(t, err, "missing authentication information")
+	require.ErrorContains(t, err, "missing application key")
 }
 
 func TestParseIPs(t *testing.T) {

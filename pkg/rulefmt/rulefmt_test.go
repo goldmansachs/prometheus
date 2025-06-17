@@ -1,1 +1,0 @@
-../../model/rulefmt/rulefmt_test.go

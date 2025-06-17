@@ -970,7 +970,7 @@ func TestEndpointsDiscoveryEmptyPodStatus(t *testing.T) {
 	}.Run(t)
 }
 
-// TestEndpointsDiscoveryUpdatePod makes sure that Endpoints discovery detects underlying Pods changes.
+// TestEndpointsUpdatePod makes sure that Endpoints discovery detects underlying Pods changes.
 // See https://github.com/prometheus/prometheus/issues/11305 for more details.
 func TestEndpointsDiscoveryUpdatePod(t *testing.T) {
 	pod := &v1.Pod{
