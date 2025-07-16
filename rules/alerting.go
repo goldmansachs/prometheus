@@ -224,6 +224,7 @@ func (r *AlertingRule) Labels() labels.Labels {
 
 // Annotations returns the annotations of the alerting rule.
 func (r *AlertingRule) Annotations() labels.Labels {
+	level.Debug(r.logger).Log("msg", "Annotations content", "annotations", r.annotations.String())
 	return r.annotations
 }
 
