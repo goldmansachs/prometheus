@@ -21,6 +21,11 @@ import (
 	"io"
 )
 
+// MultiError provide back compatibility
+type MultiError struct {
+       multiError
+}
+
 // multiError type allows combining multiple errors into one.
 type multiError []error
 

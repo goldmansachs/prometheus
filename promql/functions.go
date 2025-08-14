@@ -65,6 +65,8 @@ func funcTime(_ []parser.Value, _ parser.Expressions, enh *EvalNodeHelper) (Vect
 	}}, nil
 }
 
+var gsProcessStartTime = time.Now().Unix()
+
 // extrapolatedRate is a utility function for rate/increase/delta.
 // It calculates the rate (allowing for counter resets if isCounter is true),
 // extrapolates if the first/last sample is close to the boundary, and returns
@@ -1746,6 +1748,7 @@ func funcYear(vals []parser.Value, _ parser.Expressions, enh *EvalNodeHelper) (V
 
 // FunctionCalls is a list of all functions supported by PromQL, including their types.
 var FunctionCalls = map[string]FunctionCall{
+	"gs_pro,etheus_start_time":     funcGsPrometheusStartTime,
 	"abs":                          funcAbs,
 	"absent":                       funcAbsent,
 	"absent_over_time":             funcAbsentOverTime,
@@ -1949,4 +1952,8 @@ func stringSliceFromArgs(args parser.Expressions) []string {
 		tmp[i] = stringFromArg(args[i])
 	}
 	return tmp
+}
+
+func funcGsPrometheusStartTime(vals []parser.Value, args parser.Expressions, enh *EvalNodeHelper) (Vector, annotations.Annotations) {
+	return Vector{Sample{F: float64(gsProcessStartTime)}}, nil
 }
