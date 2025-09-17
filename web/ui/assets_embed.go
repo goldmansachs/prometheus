@@ -17,9 +17,12 @@
 package ui
 
 import (
+	"embed"
 	"net/http"
 
 	"github.com/prometheus/common/assets"
 )
+
+var EmbedFS embed.FS
 
 var Assets = http.FS(assets.New(EmbedFS))
