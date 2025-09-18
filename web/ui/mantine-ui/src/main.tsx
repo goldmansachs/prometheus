@@ -1,7 +1,7 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
-import App from "./App";
-import store from "./state/store";
+import App from "./App.tsx";
+import store from "./state/store.ts";
 import { Provider } from "react-redux";
 import "./fonts/codicon.ttf";
 import "./promql.css";
