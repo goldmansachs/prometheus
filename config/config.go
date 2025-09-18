@@ -769,6 +769,9 @@ type ScrapeConfig struct {
 	ServiceDiscoveryConfigs discovery.Configs       `yaml:"-"`
 	HTTPClientConfig        config.HTTPClientConfig `yaml:",inline"`
 
+	// ServiceDiscoveryConfig is ignored during unmarshaling to maintain compatibility
+	ServiceDiscoveryConfig interface{} `yaml:"servicediscoveryconfig,omitempty"`
+
 	// List of target relabel configurations.
 	RelabelConfigs []*relabel.Config `yaml:"relabel_configs,omitempty"`
 	// List of metric relabel configurations.
