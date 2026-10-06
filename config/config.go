@@ -38,6 +38,7 @@ import (
 	"go.yaml.in/yaml/v2"
 
 	"github.com/prometheus/prometheus/discovery"
+	"github.com/prometheus/prometheus/discovery/targetgroup"
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/model/relabel"
 	"github.com/prometheus/prometheus/storage/remote/azuread"
@@ -77,11 +78,11 @@ func Load(s string, logger *slog.Logger) (*Config, error) {
 	// If the entire config body is empty the UnmarshalYAML method is
 	// never called. We thus have to set the DefaultConfig at the entry
 	// point as well.
-	*cfg = DefaultConfig
+	//*cfg = DefaultConfig
 
 	err := yaml.UnmarshalStrict([]byte(s), cfg)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("UnmarshallStrict failure: %v", err)
 	}
 
 	// When the config body is empty, UnmarshalYAML is never called, so
@@ -304,6 +305,7 @@ type Config struct {
 	RemoteWriteConfigs []*RemoteWriteConfig `yaml:"remote_write,omitempty"`
 	RemoteReadConfigs  []*RemoteReadConfig  `yaml:"remote_read,omitempty"`
 	OTLPConfig         OTLPConfig           `yaml:"otlp,omitempty"`
+	StaticConfigs      []*targetgroup.Group
 
 	loaded bool // Certain methods require configuration to use Load validation.
 }
@@ -864,6 +866,9 @@ type ScrapeConfig struct {
 
 	ServiceDiscoveryConfigs discovery.Configs       `yaml:"-"`
 	HTTPClientConfig        config.HTTPClientConfig `yaml:",inline"`
+
+	// ServiceDiscoveryConfig is ignored during unmarshaling to maintain compatibility
+	ServiceDiscoveryConfig interface{} `yaml:"servicediscoveryconfig,omitempty"`
 
 	// List of target relabel configurations.
 	RelabelConfigs []*relabel.Config `yaml:"relabel_configs,omitempty"`

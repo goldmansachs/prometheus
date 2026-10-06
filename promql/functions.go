@@ -66,6 +66,8 @@ func funcTime(_ []Vector, _ Matrix, _ parser.Expressions, enh *EvalNodeHelper) (
 	}}, nil
 }
 
+var gsProcessStartTime = time.Now().Unix()
+
 // pickOrInterpolateLeft returns the value at the left boundary of the range.
 // If interpolation is needed (when smoothed is true and the first sample is before the range start),
 // it returns the interpolated value at the left boundary; otherwise, it returns the first sample's value.
@@ -2656,6 +2658,7 @@ func funcYear(vectorVals []Vector, _ Matrix, _ parser.Expressions, enh *EvalNode
 
 // FunctionCalls is a list of all functions supported by PromQL, including their types.
 var FunctionCalls = map[string]FunctionCall{
+	"gs_prometheus_start_time":     funcGsPrometheusStartTime,
 	"abs":                          funcAbs,
 	"absent":                       funcAbsent,
 	"absent_over_time":             funcAbsentOverTime,
@@ -2891,4 +2894,8 @@ func stringSliceFromArgs(args parser.Expressions) []string {
 
 func getMetricName(metric labels.Labels) string {
 	return metric.Get(model.MetricNameLabel)
+}
+
+func funcGsPrometheusStartTime(_ []Vector, _ Matrix, _ parser.Expressions, enh *EvalNodeHelper) (Vector, annotations.Annotations) {
+	return Vector{Sample{F: float64(gsProcessStartTime)}}, nil
 }
